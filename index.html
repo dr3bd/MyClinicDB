@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نظام العيادة المحاسبي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js" integrity="sha512-/g9hw3rroWAtxEvsC0BpvyOuk+qS0bkkCm1cW0XkyKADVY6jwxKF1u9IiMaTZGi99ZTSdKCbFf8gDuwZQ+U8wQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-/Ija+6JGZveHFkNjEcNWef39/C4R2tQeM+c/fi91tIbp/BK+f5pFwchAuCdb9wirtmHg56k97X3CJidb/6G+AQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js" integrity="sha512-e/rMzFxLpy0X58F3RDeo63eNbUsVTNff7kwh28ykVfoCENKz7dxyzKDn5XxhxL7sRKqGZo4PMBVXgS5aXoaZQA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f9fc;
+      --surface: #ffffff;
+      --primary: #0c8a8a;
+      --danger: #c0392b;
+      --accent: #f1c40f;
+      --text: #2c3e50;
+      --muted: #95a5a6;
+      font-family: 'Cairo', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Cairo', sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid #e6ecf1;
+      padding: 1rem 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    header nav {
+      display: flex;
+      gap: 0.5rem;
+      flex: 1;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    header nav button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.55rem 1.2rem;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    header nav button.secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+
+    header nav button:active {
+      transform: scale(0.97);
+    }
+
+    main {
+      flex: 1;
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 1.25rem;
+      box-shadow: 0 12px 24px rgba(15, 35, 95, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: rgba(12, 138, 138, 0.1);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 0.2rem 0.65rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .danger-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.5rem 0.8rem;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      background: rgba(192, 57, 43, 0.1);
+      color: var(--danger);
+    }
+
+    .danger-indicator.unlocked {
+      background: rgba(46, 204, 113, 0.15);
+      color: #27ae60;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
+      border: 1px solid #d8e1e8;
+      font-family: inherit;
+      font-size: 0.95rem;
+      background: white;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(12, 138, 138, 0.15);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn {
+      padding: 0.55rem 1.1rem;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .btn.primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn.secondary {
+      background: rgba(12, 138, 138, 0.1);
+      color: var(--primary);
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .toast {
+      position: fixed;
+      inset-inline-start: 50%;
+      bottom: 2rem;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 0.75rem 1.25rem;
+      box-shadow: 0 12px 32px rgba(30, 60, 90, 0.18);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 280px;
+      justify-content: space-between;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -16px);
+    }
+
+    dialog {
+      border: none;
+      border-radius: 20px;
+      padding: 1.5rem;
+      max-width: 420px;
+      width: 90vw;
+      box-shadow: 0 24px 60px rgba(15, 25, 55, 0.25);
+    }
+
+    dialog::backdrop {
+      background: rgba(10, 20, 40, 0.45);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 0.55rem 0.35rem;
+      text-align: start;
+      font-size: 0.9rem;
+      border-bottom: 1px solid #ecf1f6;
+    }
+
+    .badge {
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .badge.success {
+      background: rgba(39, 174, 96, 0.2);
+      color: #1e8449;
+    }
+
+    .badge.error {
+      background: rgba(192, 57, 43, 0.2);
+      color: #943126;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      header nav {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>لوحة التحكم المحاسبية للعيادة</h1>
+    <nav>
+      <div id="currentUser" class="tag">غير مسجل</div>
+      <div id="dangerIndicator" class="danger-indicator" role="status" aria-live="polite">🔒 الإجراءات الحساسة مقفلة</div>
+      <button id="toggleDangerBtn" class="secondary">تفعيل الوضع الحساس</button>
+      <button id="openSettings" class="secondary">الإعدادات</button>
+      <button id="exportData" class="secondary">تصدير JSON</button>
+      <label for="importFile" class="btn secondary" style="margin:0; cursor:pointer;">
+        <span>استيراد JSON</span>
+        <input type="file" id="importFile" accept="application/json" class="hidden">
+      </label>
+      <button id="logoutBtn" class="secondary">تسجيل الخروج</button>
+    </nav>
+  </header>
+  <main>
+    <section class="card" id="dashboardCard">
+      <h2>حالة النظام العامة</h2>
+      <div class="form-grid">
+        <div>
+          <label>وضع الإجراءات الحساسة</label>
+          <p id="dangerStateText">مقفول حتى إدخال كلمة الخطر</p>
+        </div>
+        <div>
+          <label>آخر نسخة احتياطية</label>
+          <p id="backupState">لم يتم التصدير بعد</p>
+        </div>
+        <div>
+          <label>مزود البيانات</label>
+          <p id="storageProvider">جارٍ التهيئة…</p>
+        </div>
+        <div>
+          <label>حالة المكتبات</label>
+          <p id="librariesStatus" class="badge">جارٍ الفحص…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="sensitiveGuardCard">
+      <h2>حارس الأذونات المركزية</h2>
+      <p>
+        يمنع النظام أي تعديل أو حذف أو إبطال أو دخول إلى الإعدادات أو الإقفالات دون تفعيل الوضع الحساس.
+        يتم التفعيل بواسطة كلمة الخطر، ويستمر لمدة 15 دقيقة أو حتى الإيقاف اليدوي.
+      </p>
+      <div class="actions">
+        <button id="lockDangerBtn" class="btn danger hidden">إيقاف الوضع الحساس</button>
+        <button id="simulateSensitiveAction" class="btn secondary">محاولة حذف تجريبية</button>
+      </div>
+    </section>
+
+    <section class="card" id="settingsCard" hidden>
+      <h2>الإعدادات العامة</h2>
+      <p class="muted">إدارة كلمات السر والأمان متاحة للمدير فقط.</p>
+      <form id="passwordForm" class="form-grid">
+        <div>
+          <label for="settingsPassword">كلمة سر الإعدادات</label>
+          <input id="settingsPassword" name="settingsPassword" type="password" required minlength="6" autocomplete="new-password" />
+        </div>
+        <div>
+          <label for="closePassword">كلمة سر الإقفال</label>
+          <input id="closePassword" name="closePassword" type="password" required minlength="6" autocomplete="new-password" />
+        </div>
+        <div>
+          <label for="dangerPassword">كلمة الخطر</label>
+          <input id="dangerPassword" name="dangerPassword" type="password" required minlength="6" autocomplete="new-password" />
+        </div>
+        <div class="actions" style="grid-column: 1 / -1;">
+          <button type="submit" class="btn primary">حفظ الكلمات</button>
+        </div>
+      </form>
+      <hr />
+      <section>
+        <h3>دليل مختصر</h3>
+        <ul>
+          <li>إقفال الفترات يتطلب كلمة الإقفال، ويولّد تقارير PDF تلقائيًا.</li>
+          <li>قبل أي حذف أو تعديل حساس، فعّل الوضع الحساس وأدخل كلمة الخطر.</li>
+          <li>استخدم التصدير الدوري لملف JSON للاحتفاظ بنسخة احتياطية.</li>
+        </ul>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="loginDialog">
+    <form method="dialog" id="loginForm">
+      <h2>تسجيل الدخول</h2>
+      <p>اختر الدور الحالي وأدخل كلمة المرور.</p>
+      <label for="roleSelect">الدور</label>
+      <select id="roleSelect" required>
+        <option value="manager">مدير</option>
+        <option value="secretary">سكرتيرة</option>
+      </select>
+      <label for="rolePassword">كلمة مرور الدخول</label>
+      <input id="rolePassword" type="password" required autocomplete="current-password" />
+      <div class="actions" style="margin-top: 1rem;">
+        <button class="btn primary" type="submit">دخول</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="passwordPrompt">
+    <form method="dialog" id="passwordPromptForm">
+      <h2 id="promptTitle">كلمة المرور مطلوبة</h2>
+      <p id="promptMessage">يرجى إدخال كلمة المرور المناسبة للمتابعة.</p>
+      <input id="promptInput" type="password" required autocomplete="off" />
+      <div class="actions" style="margin-top: 1rem;">
+        <button class="btn secondary" value="cancel" formmethod="dialog">إلغاء</button>
+        <button class="btn primary" type="submit">متابعة</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+
+  <script>
+    /* ===================== قسم الأدوات العامة ===================== */
+    const Toast = (() => {
+      let timeout;
+      const el = document.getElementById('toast');
+      return {
+        show(message, variant = 'info') {
+          el.textContent = message;
+          el.dataset.variant = variant;
+          el.classList.add('visible');
+          clearTimeout(timeout);
+          timeout = setTimeout(() => el.classList.remove('visible'), 4000);
+        }
+      };
+    })();
+
+    const promptPassword = (title, message) => {
+      return new Promise((resolve) => {
+        const dialog = document.getElementById('passwordPrompt');
+        const titleEl = document.getElementById('promptTitle');
+        const msgEl = document.getElementById('promptMessage');
+        const input = document.getElementById('promptInput');
+        const form = document.getElementById('passwordPromptForm');
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        input.value = '';
+        const onSubmit = (event) => {
+          event.preventDefault();
+          dialog.close('confirm');
+          form.removeEventListener('submit', onSubmit);
+          resolve(input.value);
+        };
+        form.addEventListener('submit', onSubmit);
+        dialog.addEventListener('close', () => {
+          form.removeEventListener('submit', onSubmit);
+          if (dialog.returnValue !== 'confirm') {
+            resolve(null);
+          }
+        }, { once: true });
+        dialog.showModal();
+        requestAnimationFrame(() => input.focus());
+      });
+    };
+
+    const arabicDigits = (value) => {
+      const map = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+      return String(value).replace(/\d/g, (d) => map[d]);
+    };
+
+    const formatDateArabic = (isoDate) => {
+      if (!isoDate) return '—';
+      const date = new Date(isoDate);
+      return date.toLocaleDateString('ar-EG', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    };
+
+    /* ===================== قسم التخزين والتهيئة ===================== */
+    const STORAGE_KEY = 'myClinicDB_v1';
+
+    const Storage = (() => {
+      const lf = localforage.createInstance({ name: 'MyClinicDB' });
+
+      const migrateFromLocalStorage = async () => {
+        const legacy = localStorage.getItem(STORAGE_KEY);
+        if (legacy) {
+          try {
+            const parsed = JSON.parse(legacy);
+            await lf.setItem(STORAGE_KEY, parsed);
+            localStorage.removeItem(STORAGE_KEY);
+            Toast.show('تمت ترقية البيانات القديمة بنجاح.', 'success');
+          } catch (error) {
+            console.error('Migration error', error);
+            Toast.show('تعذّر تحويل البيانات القديمة.', 'error');
+          }
+        }
+      };
+
+      const defaultData = {
+        settings: {
+          settingsPassword: null,
+          closePassword: null,
+          dangerPassword: null,
+          lastBackup: null,
+          clinic: {
+            name: 'عيادة الأسنان',
+            logo: ''
+          }
+        },
+        users: {
+          manager: {
+            display: 'المدير',
+            password: 'admin123'
+          },
+          secretary: {
+            display: 'السكرتيرة',
+            password: 'sec1234'
+          }
+        },
+        audit: []
+      };
+
+      const init = async () => {
+        await migrateFromLocalStorage();
+        const existing = await lf.getItem(STORAGE_KEY);
+        if (!existing) {
+          await lf.setItem(STORAGE_KEY, defaultData);
+        }
+        return lf.getItem(STORAGE_KEY);
+      };
+
+      const save = async (data) => {
+        await lf.setItem(STORAGE_KEY, data);
+        return data;
+      };
+
+      return { init, save, instance: lf };
+    })();
+
+    /* ===================== قسم حالة التطبيق ===================== */
+    const AppState = {
+      data: null,
+      currentUser: null,
+      dangerMode: false,
+      dangerTimeout: null
+    };
+
+    const updateDangerIndicator = () => {
+      const indicator = document.getElementById('dangerIndicator');
+      indicator.classList.toggle('unlocked', AppState.dangerMode);
+      indicator.textContent = AppState.dangerMode ? '🔓 الإجراءات الحساسة مفعلة' : '🔒 الإجراءات الحساسة مقفلة';
+      document.getElementById('dangerStateText').textContent = AppState.dangerMode ? 'مفتوح حتى انتهاء المدة أو الإيقاف اليدوي' : 'مقفول حتى إدخال كلمة الخطر';
+      document.getElementById('toggleDangerBtn').classList.toggle('hidden', AppState.dangerMode);
+      document.getElementById('lockDangerBtn').classList.toggle('hidden', !AppState.dangerMode);
+    };
+
+    const setCurrentUser = (roleKey) => {
+      const badge = document.getElementById('currentUser');
+      if (!roleKey) {
+        AppState.currentUser = null;
+        badge.textContent = 'غير مسجل';
+        badge.classList.remove('badge', 'success');
+        document.getElementById('settingsCard').hidden = true;
+        return;
+      }
+      AppState.currentUser = roleKey;
+      const display = AppState.data.users[roleKey]?.display || roleKey;
+      badge.textContent = display;
+      badge.classList.add('badge', 'success');
+      document.getElementById('settingsCard').hidden = roleKey !== 'manager';
+    };
+
+    /* ===================== قسم الحماية وإدارة كلمات السر ===================== */
+    const Guards = (() => {
+      const requireSettingsPassword = async () => {
+        if (AppState.currentUser !== 'manager') {
+          Toast.show('الإعدادات متاحة للمدير فقط.', 'error');
+          return false;
+        }
+        const stored = AppState.data.settings.settingsPassword;
+        if (!stored) {
+          Toast.show('لم يتم ضبط كلمة سر الإعدادات بعد.', 'info');
+          return true;
+        }
+        const input = await promptPassword('الإعدادات مؤمنة', 'أدخل كلمة سر الإعدادات للوصول.');
+        if (input === stored) {
+          Toast.show('تم فتح الإعدادات.', 'success');
+          return true;
+        }
+        Toast.show('كلمة سر غير صحيحة.', 'error');
+        return false;
+      };
+
+      const requireDangerMode = async () => {
+        if (AppState.dangerMode) {
+          return true;
+        }
+        const stored = AppState.data.settings.dangerPassword;
+        if (!stored) {
+          Toast.show('لم يتم ضبط كلمة الخطر. يُرجى ضبطها أولاً.', 'error');
+          return false;
+        }
+        const input = await promptPassword('الوضع الحساس مقفل', 'أدخل كلمة الخطر لتفعيل الوضع الحساس.');
+        if (input === stored) {
+          enableDangerMode();
+          return true;
+        }
+        Toast.show('كلمة الخطر غير صحيحة.', 'error');
+        return false;
+      };
+
+      const requireClosePassword = async () => {
+        const stored = AppState.data.settings.closePassword;
+        if (!stored) {
+          Toast.show('لم يتم ضبط كلمة سر الإقفال بعد.', 'error');
+          return false;
+        }
+        const input = await promptPassword('إقفال الفترة', 'أدخل كلمة الإقفال المتفق عليها.');
+        if (input === stored) {
+          Toast.show('تم التحقق من كلمة الإقفال.', 'success');
+          return true;
+        }
+        Toast.show('كلمة الإقفال غير صحيحة.', 'error');
+        return false;
+      };
+
+      return { requireSettingsPassword, requireDangerMode, requireClosePassword };
+    })();
+
+    const enableDangerMode = () => {
+      AppState.dangerMode = true;
+      updateDangerIndicator();
+      Toast.show('تم تفعيل الوضع الحساس لمدة ١٥ دقيقة.', 'success');
+      clearTimeout(AppState.dangerTimeout);
+      AppState.dangerTimeout = setTimeout(() => {
+        AppState.dangerMode = false;
+        updateDangerIndicator();
+        Toast.show('انتهت صلاحية الوضع الحساس تلقائيًا.', 'info');
+      }, 15 * 60 * 1000);
+    };
+
+    const disableDangerMode = () => {
+      AppState.dangerMode = false;
+      updateDangerIndicator();
+      clearTimeout(AppState.dangerTimeout);
+      Toast.show('تم إيقاف الوضع الحساس.', 'info');
+    };
+
+    /* ===================== قسم التهيئة ===================== */
+    const fillSettingsForm = () => {
+      const form = document.getElementById('passwordForm');
+      form.settingsPassword.value = AppState.data.settings.settingsPassword || '';
+      form.closePassword.value = AppState.data.settings.closePassword || '';
+      form.dangerPassword.value = AppState.data.settings.dangerPassword || '';
+    };
+
+    const updateLibraryStatus = () => {
+      const badge = document.getElementById('librariesStatus');
+      const hasLocalforage = typeof localforage !== 'undefined';
+      const hasJsPDF = typeof window.jspdf !== 'undefined';
+      const hasAutoTable = hasJsPDF && typeof window.jspdf.jsPDF === 'function' && typeof window.jspdf.jsPDF.prototype.autoTable === 'function';
+      if (hasLocalforage && hasJsPDF && hasAutoTable) {
+        badge.textContent = 'جميع المكتبات متاحة ✅';
+        badge.className = 'badge success';
+      } else {
+        badge.textContent = 'مشكلة في تحميل المكتبات';
+        badge.className = 'badge error';
+      }
+    };
+
+    const updateStorageProvider = () => {
+      const provider = AppState.data?._provider || 'IndexedDB via localForage';
+      document.getElementById('storageProvider').textContent = provider;
+    };
+
+    const updateBackupState = () => {
+      const last = AppState.data?.settings?.lastBackup;
+      document.getElementById('backupState').textContent = last ? formatDateArabic(last) : 'لم يتم التصدير بعد';
+    };
+
+    const refreshUI = () => {
+      updateDangerIndicator();
+      updateLibraryStatus();
+      updateStorageProvider();
+      updateBackupState();
+      fillSettingsForm();
+    };
+
+    /* ===================== قسم التصدير والاستيراد ===================== */
+    const handleExport = async () => {
+      const blob = new Blob([JSON.stringify(AppState.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().split('T')[0];
+      a.download = `myclinicdb-backup-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      AppState.data.settings.lastBackup = new Date().toISOString();
+      await Storage.save(AppState.data);
+      updateBackupState();
+      Toast.show('تم إنشاء نسخة احتياطية JSON بنجاح.', 'success');
+    };
+
+    const handleImport = async (file) => {
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== 'object') {
+          throw new Error('صيغة غير صالحة');
+        }
+        AppState.data = await Storage.save(parsed);
+        refreshUI();
+        Toast.show('تم الاستيراد بنجاح.', 'success');
+      } catch (error) {
+        console.error(error);
+        Toast.show('تعذّر استيراد الملف. تأكد من صحة JSON.', 'error');
+      } finally {
+        document.getElementById('importFile').value = '';
+      }
+    };
+
+    /* ===================== قسم تسجيل الدخول ===================== */
+    const showLogin = () => {
+      const dialog = document.getElementById('loginDialog');
+      dialog.showModal();
+    };
+
+    const verifyLogin = (role, password) => {
+      const record = AppState.data.users[role];
+      if (!record) return false;
+      return record.password === password;
+    };
+
+    /* ===================== قسم التدقيق ===================== */
+    const auditLog = (action, details = {}) => {
+      const entry = {
+        id: crypto.randomUUID(),
+        user: AppState.currentUser,
+        action,
+        details,
+        timestamp: new Date().toISOString()
+      };
+      AppState.data.audit.unshift(entry);
+      Storage.save(AppState.data).catch(console.error);
+    };
+
+    /* ===================== تهيئة المستمعين ===================== */
+    const attachListeners = () => {
+      document.getElementById('openSettings').addEventListener('click', async () => {
+        if (await Guards.requireSettingsPassword()) {
+          document.getElementById('settingsCard').hidden = false;
+        }
+      });
+
+      document.getElementById('toggleDangerBtn').addEventListener('click', () => {
+        Guards.requireDangerMode();
+      });
+
+      document.getElementById('lockDangerBtn').addEventListener('click', () => {
+        disableDangerMode();
+      });
+
+      document.getElementById('simulateSensitiveAction').addEventListener('click', async () => {
+        const allowed = await Guards.requireDangerMode();
+        if (!allowed) {
+          Toast.show('تم منع العملية لعدم تفعيل الوضع الحساس.', 'error');
+          auditLog('sensitive_denied', { reason: 'danger-mode-disabled' });
+          return;
+        }
+        Toast.show('تمت محاكاة الحذف بنجاح (لا يوجد بيانات حقيقية).', 'success');
+        auditLog('sensitive_mock', { operation: 'delete-demo' });
+      });
+
+      document.getElementById('exportData').addEventListener('click', handleExport);
+      document.getElementById('importFile').addEventListener('change', (event) => handleImport(event.target.files[0]));
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+        setCurrentUser(null);
+        showLogin();
+      });
+
+      document.getElementById('passwordForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        AppState.data.settings.settingsPassword = form.settingsPassword.value.trim() || null;
+        AppState.data.settings.closePassword = form.closePassword.value.trim() || null;
+        AppState.data.settings.dangerPassword = form.dangerPassword.value.trim() || null;
+        await Storage.save(AppState.data);
+        Toast.show('تم حفظ كلمات السر بنجاح.', 'success');
+        auditLog('settings_updated', { fields: ['settingsPassword', 'closePassword', 'dangerPassword'] });
+      });
+
+      document.getElementById('loginForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const role = document.getElementById('roleSelect').value;
+        const password = document.getElementById('rolePassword').value;
+        if (verifyLogin(role, password)) {
+          setCurrentUser(role);
+          document.getElementById('loginDialog').close();
+          Toast.show('مرحبًا بك! تم تسجيل الدخول.', 'success');
+          auditLog('login', { role });
+        } else {
+          Toast.show('بيانات الدخول غير صحيحة.', 'error');
+        }
+      });
+    };
+
+    /* ===================== بدء التطبيق ===================== */
+    (async () => {
+      try {
+        AppState.data = await Storage.init();
+        AppState.data._provider = 'IndexedDB via localForage';
+        refreshUI();
+        attachListeners();
+        showLogin();
+      } catch (error) {
+        console.error('Initialization error', error);
+        Toast.show('تعذّر تهيئة قاعدة البيانات المحلية.', 'error');
+      }
+    })();
+  </script>
+</body>
+</html>
