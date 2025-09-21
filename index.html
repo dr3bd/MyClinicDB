@@ -1,0 +1,2498 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>MyClinicDB</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root {
+      --primary:#145C9E;
+      --accent:#1ABC9C;
+      --danger:#E74C3C;
+      --bg:#F7F9FC;
+      --text:#1B263B;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      font-family:'Cairo',sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      background:var(--primary);
+      color:#fff;
+      padding:1.25rem 1.5rem;
+    }
+    main{
+      display:grid;
+      grid-template-columns:260px 1fr;
+      min-height:calc(100vh - 96px);
+    }
+    nav{
+      background:#fff;
+      border-left:1px solid #dce6f2;
+      padding:1rem;
+      display:flex;
+      flex-direction:column;
+      gap:.5rem;
+    }
+    nav button{
+      border-radius:12px;
+      border:1px solid transparent;
+      padding:.75rem 1rem;
+      background:transparent;
+      text-align:right;
+      font-weight:600;
+      color:var(--text);
+      cursor:pointer;
+    }
+    nav button.active,nav button:hover{
+      border-color:var(--primary);
+      color:var(--primary);
+      background:rgba(20,92,158,0.08);
+    }
+    section{
+      padding:1.5rem;
+      overflow-y:auto;
+    }
+    .card{
+      background:#fff;
+      border-radius:16px;
+      padding:1.25rem;
+      box-shadow:0 12px 32px rgba(0,0,0,.06);
+      margin-bottom:1.5rem;
+    }
+    .grid{display:grid;gap:1rem;}
+    .grid-2{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
+    label{display:block;font-weight:600;margin-bottom:.3rem;}
+    input,select,textarea{
+      width:100%;
+      padding:.6rem .8rem;
+      border-radius:12px;
+      border:1px solid #dbe5ef;
+      font-family:inherit;
+    }
+    textarea{min-height:120px;}
+    table{width:100%;border-collapse:collapse;direction:rtl;}
+    th,td{padding:.6rem;border-bottom:1px solid #eef2f7;text-align:right;}
+    th{background:#f0f5fb;}
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:.4rem;
+      background:var(--primary);
+      color:#fff;
+      border:none;
+      border-radius:12px;
+      padding:.6rem 1rem;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .btn.secondary{background:var(--accent);}
+    .btn.danger{background:var(--danger);}
+    .badge{
+      display:inline-flex;
+      gap:.3rem;
+      align-items:center;
+      padding:.35rem .75rem;
+      background:rgba(20,92,158,.12);
+      color:var(--primary);
+      border-radius:999px;
+      font-size:.75rem;
+    }
+    .badge.danger{background:rgba(231,76,60,.15);color:var(--danger);}
+    .toast{
+      position:fixed;top:1.5rem;left:50%;transform:translateX(-50%);
+      background:#fff;padding:1rem 1.5rem;border-radius:16px;display:none;z-index:9999;
+      box-shadow:0 12px 32px rgba(0,0,0,.15);
+      min-width:260px;text-align:center;
+    }
+    .toast.show{display:block;}
+    .toast.error{border-right:6px solid var(--danger);}
+    .toast.success{border-right:6px solid var(--accent);}
+    #modalOverlay{
+      position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
+      display:none;align-items:center;justify-content:center;z-index:9000;
+    }
+    #modalOverlay.active{display:flex;}
+    .modal{background:#fff;padding:1.5rem;border-radius:18px;min-width:min(420px,94vw);}
+    .modal header{margin-bottom:1rem;}
+    .flex{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;}
+    .sensitive-active{border:2px dashed var(--danger);padding:.4rem .8rem;border-radius:10px;color:var(--danger);}
+    @media(max-width:960px){
+      main{grid-template-columns:1fr;}
+      nav{flex-direction:row;flex-wrap:wrap;border-left:none;border-top:1px solid #dce6f2;}
+      nav button{flex:1 1 calc(50% - .5rem);}
+    }
+  </style>
+</head>
+<body>
+  <div class="toast" id="toast"></div>
+  <div id="modalOverlay"></div>
+  <header>
+    <h1>MyClinicDB — النظام المحاسبي</h1>
+    <div class="flex" id="statusBar">
+      <span id="roleBadge" class="badge">الوضع: سكرتارية</span>
+      <span id="sensitiveBadge" class="badge danger">الإجراءات الحساسة: 🔒</span>
+      <button class="btn" id="btnSensitive">تفعيل الوضع الحساس</button>
+      <button class="btn secondary" id="btnSwitchRole">تبديل المستخدم</button>
+    </div>
+  </header>
+  <main>
+    <nav id="mainNav"></nav>
+    <section id="view"></section>
+  </main>
+  <script>
+    const App = {
+      role:'secretary',
+      sensitive:false,
+      passwords:{settings:'123456',close:'654321',danger:'246810'},
+      settings:{
+        clinicName:'عيادة أسنان متقدمة',
+        clinicLogo:'',
+        currency:'SAR',
+        overheadAllocation:'revenue',
+        numberFormat:'ar'
+      },
+      counters:{},
+      view:'dashboard'
+    };
+
+    const Views = {};
+    const DENTAL_TEETH=[
+      '18','17','16','15','14','13','12','11',
+      '21','22','23','24','25','26','27','28',
+      '38','37','36','35','34','33','32','31',
+      '41','42','43','44','45','46','47','48'
+    ];
+    const DENTAL_STATUSES=['سليم','محشو','مفقود','تحت العلاج','زرعة'];
+
+    function showToast(msg,type='success'){
+      const el=document.getElementById('toast');
+      el.textContent=msg;
+      el.className=`toast show ${type}`;
+      setTimeout(()=>el.classList.remove('show'),3500);
+    }
+
+    function formatDate(date){
+      if(!date) return '-';
+      const d=new Date(date);
+      return d.toLocaleDateString('ar-SA',{year:'numeric',month:'2-digit',day:'2-digit'});
+    }
+    function formatCurrency(val){
+      return new Intl.NumberFormat('ar-EG',{style:'currency',currency:App.settings.currency||'SAR'}).format(val||0);
+    }
+
+    const Storage={
+      async init(){
+        localforage.config({name:'MyClinicDB',storeName:'clinic_store'});
+        const settings=await localforage.getItem('settings');
+        if(settings){
+          App.settings={...App.settings,...settings};
+          if(settings.passwords) App.passwords={...App.passwords,...settings.passwords};
+        }
+        App.counters=await localforage.getItem('referenceCounters')||{};
+      },
+      async load(key,fallback=[]){
+        return await localforage.getItem(key)||fallback;
+      },
+      async save(key,val){
+        await localforage.setItem(key,val);
+      }
+    };
+
+    function generateReference(prefix){
+      const now=new Date();
+      const ym=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+      const key=`${prefix}-${ym}`;
+      const counter=(App.counters[key]||0)+1;
+      App.counters[key]=counter;
+      localforage.setItem('referenceCounters',App.counters);
+      return `${prefix}-${ym}-${String(counter).padStart(4,'0')}`;
+    }
+
+    function updateStatus(){
+      document.getElementById('roleBadge').textContent=`الوضع: ${App.role==='manager'?'مدير':'سكرتارية'}`;
+      document.getElementById('btnSensitive').disabled=App.role!=='manager';
+      document.getElementById('sensitiveBadge').textContent=`الإجراءات الحساسة: ${App.sensitive?'🔓':'🔒'}`;
+      document.getElementById('sensitiveBadge').className=`badge ${App.sensitive?'':'danger'}`;
+    }
+
+    function renderNav(){
+      const nav=document.getElementById('mainNav');
+      nav.innerHTML='';
+      const items=[
+        {id:'dashboard',label:'لوحة التحكم'},
+        {id:'receipts',label:'سندات القبض'},
+        {id:'payments',label:'سندات الصرف'},
+        {id:'journal',label:'دفتر اليومية'},
+        {id:'patients',label:'المرضى والأمانات'},
+        {id:'appointments',label:'المواعيد'},
+        {id:'suppliers',label:'الموردون والمشتريات'},
+        {id:'labs',label:'المعامل'},
+        {id:'inventory',label:'المخزون'},
+        {id:'finance',label:'المصروفات والإهلاك'},
+        {id:'doctors',label:'الأطباء والربحية'},
+        {id:'prescriptions',label:'الوصفات الطبية'},
+        {id:'controls',label:'التسويات والمراجعة'},
+        {id:'reports',label:'التقارير'},
+        {id:'settings',label:'الإعدادات'}
+      ];
+      items.forEach(item=>{
+        if(App.role!=='manager' && item.id==='settings') return;
+        const btn=document.createElement('button');
+        btn.textContent=item.label;
+        if(App.view===item.id) btn.classList.add('active');
+        btn.onclick=()=>switchView(item.id);
+        nav.appendChild(btn);
+      });
+    }
+
+    function switchView(id){
+      App.view=id;
+      renderNav();
+      const container=document.getElementById('view');
+      container.innerHTML=Views[id]?Views[id]():'';
+      const hooks={
+        dashboard:()=>renderDashboardWidgets(),
+        receipts:()=>renderReceiptsTable(),
+        payments:()=>renderPaymentsTable(),
+        journal:()=>renderJournalTable(),
+        patients:()=>{renderPatientsTable();renderPatientReceivables();renderMedicalAlerts();renderDentalChartControls();},
+        appointments:()=>renderAppointmentsTable(),
+        suppliers:()=>{renderSupplierReturns();},
+        labs:()=>renderLabsTable(),
+        inventory:()=>renderInventoryTable(),
+        finance:()=>{renderOperatingExpenses();renderFixedAssets();renderPeriodClosings();},
+        doctors:()=>renderDoctorsTable(),
+        prescriptions:()=>renderPrescriptionsTable(),
+        controls:()=>{renderBankReconciliations();},
+        reports:()=>{},
+        settings:()=>{}
+      };
+      if(hooks[id]) hooks[id]();
+    }
+
+    function promptPassword(type,cb){
+      const overlay=document.getElementById('modalOverlay');
+      overlay.innerHTML=`<div class="modal">
+        <header><h3>كلمة المرور</h3></header>
+        <p>أدخل كلمة المرور (${type==='settings'?'الإعدادات':type==='close'?'الإقفال':'الإجراءات الحساسة'})</p>
+        <input id="pwdField" type="password" style="width:100%;margin-bottom:1rem;" />
+        <div class="flex" style="justify-content:flex-end;">
+          <button class="btn" id="confirmPwd">تأكيد</button>
+        </div>
+      </div>`;
+      overlay.classList.add('active');
+      document.getElementById('confirmPwd').onclick=()=>{
+        const value=document.getElementById('pwdField').value;
+        if(value===App.passwords[type]){
+          overlay.classList.remove('active');
+          cb();
+        }else{
+          showToast('كلمة المرور غير صحيحة','error');
+        }
+      };
+      overlay.addEventListener('click',e=>{if(e.target.id==='modalOverlay')overlay.classList.remove('active');},{once:true});
+    }
+
+    function guardSensitive(cb){
+      if(!App.sensitive){
+        showToast('فعّل الوضع الحساس أولاً','error');
+        return;
+      }
+      promptPassword('danger',cb);
+    }
+
+    async function logAudit(action,reference,description,payload={}){
+      const log=await Storage.load('audit');
+      log.push({id:Date.now(),action,reference,description,payload,user:App.role,timestamp:new Date().toISOString()});
+      await Storage.save('audit',log);
+    }
+
+    function computeLedgerTotals(journals){
+      return journals.reduce((acc,j)=>{
+        j.entries.forEach(e=>{
+          acc.debit+=e.debit||0;
+          acc.credit+=e.credit||0;
+        });
+        return acc;
+      },{debit:0,credit:0});
+    }
+
+    async function recordJournal(entries,meta){
+      const debit=entries.reduce((s,e)=>s+(e.debit||0),0);
+      const credit=entries.reduce((s,e)=>s+(e.credit||0),0);
+      if(Math.abs(debit-credit)>0.01){
+        showToast('القيد غير متوازن','error');
+        throw new Error('unbalanced');
+      }
+      const journals=await Storage.load('journals');
+      const doc={id:generateReference('JV'),entries,meta,createdAt:new Date().toISOString()};
+      const prospective=[...journals,doc];
+      const totals=computeLedgerTotals(prospective);
+      const imbalance=Math.abs(totals.debit-totals.credit);
+      if(imbalance>0.05){
+        showToast('تحذير: دفتر اليومية غير متزن بعد هذا القيد','error');
+        await logAudit('alert','TRIAL-IMBALANCE','محاولة إدخال تسببت في عدم اتزان',{meta,debit:totals.debit,credit:totals.credit});
+        throw new Error('ledger-imbalance');
+      }
+      journals.push(doc);
+      await Storage.save('journals',journals);
+      await logAudit('add',doc.id,'إضافة قيد يومية',meta);
+      return doc;
+    }
+
+    function Views_dashboard(){
+      return `
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>فترة اليوم — صباح</h2>
+          <div id="periodMorning"></div>
+          <div class="flex" style="margin-top:1rem;">
+            <button class="btn secondary" onclick="exportPeriodPDF('morning')">PDF</button>
+            <button class="btn" onclick="closePeriod('morning')">إقفال الفترة</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>فترة اليوم — مساء</h2>
+          <div id="periodEvening"></div>
+          <div class="flex" style="margin-top:1rem;">
+            <button class="btn secondary" onclick="exportPeriodPDF('evening')">PDF</button>
+            <button class="btn" onclick="closePeriod('evening')">إقفال الفترة</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>الميزان المصغّر</h2>
+          <div id="miniTrial"></div>
+          <div class="flex" style="margin-top:1rem;">
+            <button class="btn" onclick="refreshMiniTrial()">تحديث</button>
+            <button class="btn secondary" onclick="miniTrialPDF()">PDF</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>مواعيد الغد</h2>
+          <div id="appointmentsTomorrow"></div>
+          <button class="btn secondary" style="margin-top:1rem;" onclick="appointmentsPDF()">PDF</button>
+        </div>
+        <div class="card">
+          <h2>المخزون</h2>
+          <div id="inventoryAlerts"></div>
+          <button class="btn secondary" style="margin-top:1rem;" onclick="inventoryAlertsPDF()">PDF</button>
+        </div>
+      </div>`;
+    }
+    Views.dashboard=Views_dashboard;
+
+    function Views_receipts(){
+      return `
+      <div class="card">
+        <h2>سند قبض</h2>
+        <div class="grid grid-2">
+          <div><label>المريض/الطرف</label><input id="receiptPatient" /></div>
+          <div><label>الخدمة</label><input id="receiptService" /></div>
+          <div><label>الطبيب</label><input id="receiptDoctor" /></div>
+          <div><label>المبلغ</label><input id="receiptAmount" type="number" min="0" step="0.05" /></div>
+          <div><label>ملاحظات</label><textarea id="receiptNotes"></textarea></div>
+          <div><label>مرفقات</label><input type="file" id="receiptAttachment" accept="image/*,.pdf" /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveReceipt()">حفظ</button>
+          <button class="btn secondary" onclick="downloadReceiptPDF()">PDF</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>سندات مسجلة</h2>
+          <input id="receiptSearch" placeholder="بحث بالمرجع" oninput="debounced(()=>renderReceiptsTable())" />
+        </div>
+        <table>
+          <thead><tr><th>المرجع</th><th>التاريخ</th><th>المريض</th><th>الخدمة</th><th>المبلغ</th><th>الحالة</th><th>خيارات</th></tr></thead>
+          <tbody id="receiptTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.receipts=Views_receipts;
+
+    function Views_payments(){
+      return `
+      <div class="card">
+        <h2>سند صرف</h2>
+        <div class="grid grid-2">
+          <div><label>المورد/المعمل</label><input id="paymentSupplier" /></div>
+          <div><label>الحالة</label><select id="paymentStatus"><option value="paid">مدفوع</option><option value="pending">معلّق</option></select></div>
+          <div><label>المبلغ</label><input id="paymentAmount" type="number" min="0" step="0.05" /></div>
+          <div><label>ملاحظات</label><textarea id="paymentNotes"></textarea></div>
+          <div><label>مرفقات</label><input type="file" id="paymentAttachment" accept="image/*,.pdf" /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="savePayment()">حفظ</button>
+          <button class="btn secondary" onclick="downloadPaymentPDF()">PDF</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>السندات</h2>
+          <input id="paymentSearch" placeholder="بحث بالمرجع" oninput="debounced(()=>renderPaymentsTable())" />
+        </div>
+        <table>
+          <thead><tr><th>المرجع</th><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>الحالة</th><th>خيارات</th></tr></thead>
+          <tbody id="paymentTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.payments=Views_payments;
+
+    function Views_journal(){
+      return `
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>دفتر اليومية</h2>
+          <div class="flex">
+            <input id="journalFilter" placeholder="بحث" oninput="debounced(()=>renderJournalTable())" />
+            <button class="btn secondary" onclick="journalPDF()">PDF</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>المرجع</th><th>التاريخ</th><th>الوصف</th><th>القيود</th></tr></thead>
+          <tbody id="journalTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.journal=Views_journal;
+
+    function Views_patients(){
+      return `
+      <div class="card">
+        <h2>مريض جديد</h2>
+        <div class="grid grid-2">
+          <div><label>الاسم</label><input id="patientName" /></div>
+          <div><label>الهاتف</label><input id="patientPhone" /></div>
+          <div><label>أمانات</label><input id="patientDeposit" type="number" min="0" step="0.05" /></div>
+          <div><label>ملاحظات</label><textarea id="patientNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="savePatient()">حفظ</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>قائمة المرضى</h2>
+          <button class="btn secondary" onclick="patientsAgingPDF()">PDF أعمار الذمم</button>
+        </div>
+        <table>
+          <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرصيد</th><th>الأمانات</th><th>تنبيهات</th><th>خيارات</th></tr></thead>
+          <tbody id="patientTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>السجل السني للمريض</h2>
+        <div class="grid grid-2">
+          <div><label>المريض</label><select id="dentalPatient"></select></div>
+          <div><label>ملاحظات السجل</label><textarea id="dentalNotes"></textarea></div>
+        </div>
+        <div id="dentalChart" style="margin-top:1rem;"></div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveDentalChart()">حفظ السجل السني</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>ذمم المرضى</h2>
+        <div class="grid grid-2">
+          <div><label>المريض</label><select id="receivablePatient"></select></div>
+          <div><label>المبلغ</label><input id="receivableAmount" type="number" min="0" step="0.05" /></div>
+          <div><label>تاريخ الاستحقاق</label><input id="receivableDue" type="date" /></div>
+          <div><label>ملاحظات</label><textarea id="receivableNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="savePatientReceivable()">تسجيل ذمة</button>
+        </div>
+        <table style="margin-top:1.5rem;">
+          <thead><tr><th>المريض</th><th>المبلغ</th><th>المتبقي</th><th>تاريخ الاستحقاق</th><th>الحالة</th></tr></thead>
+          <tbody id="patientReceivableTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>التنبيهات الطبية</h2>
+        <div class="grid grid-2">
+          <div><label>المريض</label><select id="alertPatient"></select></div>
+          <div><label>نوع التنبيه</label><input id="alertType" placeholder="حساسية، مرض مزمن..." /></div>
+          <div><label>الخطورة</label><select id="alertSeverity"><option value="low">منخفض</option><option value="medium">متوسط</option><option value="high">مرتفع</option></select></div>
+          <div><label>ملاحظات</label><textarea id="alertNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveMedicalAlert()">إضافة تنبيه</button>
+        </div>
+        <div id="medicalAlertsList" style="margin-top:1rem;"></div>
+      </div>`;
+    }
+    Views.patients=Views_patients;
+
+    function Views_appointments(){
+      return `
+      <div class="card">
+        <h2>حجز موعد</h2>
+        <div class="grid grid-2">
+          <div><label>المريض</label><select id="appointmentPatient"></select></div>
+          <div><label>الخدمة</label><input id="appointmentService" /></div>
+          <div><label>الطبيب</label><input id="appointmentDoctor" /></div>
+          <div><label>التاريخ</label><input id="appointmentDate" type="datetime-local" /></div>
+          <div><label>الفترة</label><select id="appointmentPeriod"><option value="morning">صباح</option><option value="evening">مساء</option></select></div>
+          <div><label>الحالة</label><select id="appointmentStatus"><option value="scheduled">مجدول</option><option value="in-progress">قيد التنفيذ</option><option value="completed">تم</option><option value="cancelled">ملغي</option></select></div>
+          <div><label>المدفوع</label><input id="appointmentPaid" type="number" min="0" step="0.05" /></div>
+          <div><label>المتبقي</label><input id="appointmentDue" type="number" min="0" step="0.05" /></div>
+          <div class="full"><label>ملاحظات</label><textarea id="appointmentNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveAppointment()">حفظ الموعد</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>جدول المواعيد</h2>
+          <div class="flex">
+            <select id="appointmentFilterDoctor" onchange="renderAppointmentsTable()"><option value="">كل الأطباء</option></select>
+            <select id="appointmentFilterStatus" onchange="renderAppointmentsTable()"><option value="">كل الحالات</option><option value="scheduled">مجدول</option><option value="in-progress">قيد التنفيذ</option><option value="completed">تم</option><option value="cancelled">ملغي</option></select>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>المريض</th><th>الخدمة</th><th>الطبيب</th><th>التاريخ</th><th>الحالة</th><th>المبالغ</th><th>خيارات</th></tr></thead>
+          <tbody id="appointmentsTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.appointments=Views_appointments;
+
+    function Views_suppliers(){
+      return `
+      <div class="card">
+        <h2>فاتورة مشتريات</h2>
+        <div class="grid grid-2">
+          <div><label>المورد</label><input id="invoiceSupplier" /></div>
+          <div><label>إلى المخزون؟</label><select id="invoiceToStock"><option value="yes">نعم</option><option value="no">استهلاك</option></select></div>
+          <div><label>القيمة</label><input id="invoiceAmount" type="number" min="0" step="0.05" /></div>
+          <div><label>ملاحظات</label><textarea id="invoiceNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="savePurchaseInvoice()">حفظ</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>مرتجعات مؤجلة</h2>
+        <div class="grid grid-2">
+          <div><label>المورد</label><input id="returnSupplier" /></div>
+          <div><label>القيمة</label><input id="returnAmount" type="number" min="0" step="0.05" /></div>
+          <div><label>الحالة</label><select id="returnStatus"><option value="pending">Pending</option><option value="settled">Settled</option></select></div>
+          <div><label>ملاحظات</label><textarea id="returnNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveSupplierReturn()">حفظ</button>
+        </div>
+        <table style="margin-top:1.5rem;">
+          <thead><tr><th>المرجع</th><th>المورد</th><th>القيمة</th><th>الحالة</th><th>خيارات</th></tr></thead>
+          <tbody id="returnsTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.suppliers=Views_suppliers;
+
+    function Views_labs(){
+      return `
+      <div class="card">
+        <h2>طلب معمل</h2>
+        <div class="grid grid-2">
+          <div><label>المريض</label><input id="labPatient" /></div>
+          <div><label>الطبيب</label><input id="labDoctor" /></div>
+          <div><label>الخدمة</label><input id="labService" /></div>
+          <div><label>عدد القطع</label><input id="labUnits" type="number" min="1" value="1" /></div>
+          <div><label>تاريخ الإرسال</label><input id="labSent" type="date" /></div>
+          <div><label>تاريخ متوقع</label><input id="labExpected" type="date" /></div>
+          <div><label>التكلفة</label><input id="labCost" type="number" min="0" step="0.05" /></div>
+          <div><label>الحالة</label><select id="labStatus">
+            <option value="requested">مطلوب</option>
+            <option value="in-progress">قيد التنفيذ</option>
+            <option value="delayed">متأخر</option>
+            <option value="done">تم</option>
+            <option value="cancelled">ملغي</option>
+            <option value="transferred">محوّل</option>
+          </select></div>
+          <div><label>ملف النتيجة</label><input type="file" id="labResultFile" accept="image/*,.pdf" /></div>
+          <div class="full"><label>ملاحظات</label><textarea id="labNotes"></textarea></div>
+          <div class="full"><label>نتيجة/تقرير المعمل</label><textarea id="labResult"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveLabOrder()">حفظ</button>
+          <button class="btn secondary" onclick="labSummaryPDF()">PDF</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>طلبات المعمل</h2>
+          <div id="labStats" class="badge">جاري التحميل...</div>
+        </div>
+        <table>
+          <thead><tr><th>المرجع</th><th>المريض</th><th>الخدمة</th><th>الحالة</th><th>التكلفة</th><th>النتيجة</th><th>خيارات</th></tr></thead>
+          <tbody id="labsTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.labs=Views_labs;
+
+    function Views_inventory(){
+      return `
+      <div class="card">
+        <h2>بطاقة مادة</h2>
+        <div class="grid grid-2">
+          <div><label>الاسم</label><input id="itemName" /></div>
+          <div><label>الكمية</label><input id="itemQty" type="number" min="0" /></div>
+          <div><label>الحد الأدنى</label><input id="itemMin" type="number" min="0" /></div>
+          <div><label>تاريخ الصلاحية</label><input id="itemExpiry" type="date" /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveInventoryItem()">حفظ</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>المواد</h2>
+          <button class="btn secondary" onclick="inventoryPDF()">PDF</button>
+        </div>
+        <table>
+          <thead><tr><th>الاسم</th><th>الكمية</th><th>الحد الأدنى</th><th>الصلاحية</th><th>تنبيه</th><th>خيارات</th></tr></thead>
+          <tbody id="inventoryTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.inventory=Views_inventory;
+
+    function Views_finance(){
+      return `
+      <div class="card">
+        <h2>مصروفات تشغيلية دورية</h2>
+        <div class="grid grid-2">
+          <div><label>اسم المصروف</label><input id="expenseName" /></div>
+          <div><label>القيمة</label><input id="expenseAmount" type="number" min="0" step="0.05" /></div>
+          <div><label>التكرار</label><select id="expenseFrequency"><option value="monthly">شهري</option><option value="quarterly">ربع سنوي</option><option value="yearly">سنوي</option></select></div>
+          <div><label>تاريخ الاستحقاق القادم</label><input id="expenseNextDue" type="date" /></div>
+          <div><label>مركز التكلفة</label><input id="expenseCostCenter" placeholder="عيادة 1، استقبال..." /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveRecurringExpense()">حفظ المصروف</button>
+          <button class="btn secondary" onclick="postRecurringExpenses()">ترحيل مصروفات مستحقة</button>
+        </div>
+        <table style="margin-top:1.5rem;">
+          <thead><tr><th>المصروف</th><th>القيمة</th><th>التكرار</th><th>الاستحقاق التالي</th><th>مركز التكلفة</th><th>حالة</th></tr></thead>
+          <tbody id="operatingExpensesTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>الأصول الثابتة والإهلاك</h2>
+        <div class="grid grid-2">
+          <div><label>اسم الأصل</label><input id="assetName" /></div>
+          <div><label>تاريخ الشراء</label><input id="assetPurchase" type="date" /></div>
+          <div><label>التكلفة</label><input id="assetCost" type="number" min="0" step="0.05" /></div>
+          <div><label>العمر الإنتاجي (أشهر)</label><input id="assetLife" type="number" min="1" /></div>
+          <div><label>مركز التكلفة</label><input id="assetCenter" /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveFixedAsset()">حفظ الأصل</button>
+          <button class="btn secondary" onclick="postMonthlyDepreciation()">إهلاك الشهر الحالي</button>
+        </div>
+        <table style="margin-top:1.5rem;">
+          <thead><tr><th>الأصل</th><th>التكلفة</th><th>الإهلاك الشهري</th><th>المجمع</th><th>آخر شهر</th></tr></thead>
+          <tbody id="fixedAssetsTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>إقفال الفترات</h2>
+        <div class="flex" style="gap:1rem;flex-wrap:wrap;">
+          <button class="btn" onclick="closeMonth()">إقفال الشهر</button>
+          <button class="btn" onclick="closeYear()">إقفال السنة</button>
+        </div>
+        <table style="margin-top:1.5rem;">
+          <thead><tr><th>الفترة</th><th>النوع</th><th>الإيرادات</th><th>المصروفات</th><th>صافي الربح</th></tr></thead>
+          <tbody id="periodClosingsTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.finance=Views_finance;
+
+    function Views_doctors(){
+      return `
+      <div class="card">
+        <h2>طبيب</h2>
+        <div class="grid grid-2">
+          <div><label>الاسم</label><input id="doctorName" /></div>
+          <div><label>النسبة (%)</label><input id="doctorShare" type="number" min="30" max="50" /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveDoctor()">حفظ</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;align-items:center;">
+          <h2>ربحية الأطباء</h2>
+          <button class="btn secondary" onclick="doctorProfitPDF()">PDF</button>
+        </div>
+        <table>
+          <thead><tr><th>الطبيب</th><th>الإيرادات</th><th>تكلفة المعمل</th><th>النسبة</th><th>نصيب الطبيب</th><th>مساهمة العيادة</th></tr></thead>
+          <tbody id="doctorTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.doctors=Views_doctors;
+
+    function Views_prescriptions(){
+      return `
+      <div class="card">
+        <h2>وصفة طبية جديدة</h2>
+        <div class="grid grid-2">
+          <div><label>المريض</label><select id="prescriptionPatient"></select></div>
+          <div><label>الطبيب</label><input id="prescriptionDoctor" /></div>
+          <div><label>تاريخ الوصفة</label><input id="prescriptionDate" type="date" /></div>
+          <div><label>مدة الاستخدام (أيام)</label><input id="prescriptionDuration" type="number" min="1" /></div>
+          <div class="full"><label>الأدوية والتعليمات</label><textarea id="prescriptionNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="savePrescription()">حفظ الوصفة</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>الوصفات</h2>
+        <table>
+          <thead><tr><th>المريض</th><th>الطبيب</th><th>التاريخ</th><th>المدة</th><th>خيارات</th></tr></thead>
+          <tbody id="prescriptionsTable"></tbody>
+        </table>
+      </div>`;
+    }
+    Views.prescriptions=Views_prescriptions;
+
+    function Views_controls(){
+      return `
+      <div class="card">
+        <h2>تسوية بنكية</h2>
+        <div class="grid grid-2">
+          <div><label>التاريخ</label><input id="reconDate" type="date" /></div>
+          <div><label>رصيد البنك</label><input id="reconBank" type="number" step="0.05" /></div>
+          <div><label>رصيد الدفاتر</label><input id="reconBooks" type="number" step="0.05" /></div>
+          <div><label>فروق مسجلة</label><textarea id="reconNotes"></textarea></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveBankReconciliation()">تسجيل تسوية</button>
+        </div>
+        <table style="margin-top:1.5rem;">
+          <thead><tr><th>التاريخ</th><th>رصيد البنك</th><th>رصيد الدفاتر</th><th>الفرق</th><th>حالة المراجعة</th><th>خيارات</th></tr></thead>
+          <tbody id="bankReconciliationTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>مراجعة داخلية</h2>
+        <button class="btn" onclick="runInternalReview()">تشغيل مراجعة</button>
+        <div id="internalReviewReport" style="margin-top:1rem;"></div>
+      </div>`;
+    }
+    Views.controls=Views_controls;
+
+    function Views_reports(){
+      return `
+      <div class="card">
+        <h2>مركز التقارير</h2>
+        <div class="grid grid-2">
+          <button class="btn" onclick="dailyReportPDF()">تقرير يومي</button>
+          <button class="btn" onclick="weeklyReportPDF()">تقرير أسبوعي</button>
+          <button class="btn" onclick="monthlyReportPDF()">تقرير شهري</button>
+          <button class="btn" onclick="labSummaryPDF()">كشف المعامل</button>
+          <button class="btn" onclick="supplierAgingPDF()">كشف الموردين</button>
+          <button class="btn" onclick="patientsAgingPDF()">أعمار الذمم</button>
+          <button class="btn" onclick="inventoryPDF()">المخزون</button>
+          <button class="btn" onclick="clinicProfitPDF()">ربحية العيادة</button>
+          <button class="btn" onclick="doctorProfitPDF()">ربحية الأطباء</button>
+          <button class="btn" onclick="journalPDF()">دفتر اليومية</button>
+          <button class="btn" onclick="auditLogPDF()">سجل التدقيق</button>
+          <button class="btn" onclick="exportDataJSON()">تصدير JSON</button>
+          <button class="btn" onclick="importDataJSON()">استيراد JSON</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>بحث مرجعي</h2>
+        <input id="referenceSearch" placeholder="أدخل رقم المرجع" />
+        <button class="btn" style="margin-top:1rem;" onclick="searchReference()">بحث</button>
+        <div id="referenceResult" style="margin-top:1rem;"></div>
+      </div>`;
+    }
+    Views.reports=Views_reports;
+
+    function Views_settings(){
+      return `
+      <div class="card">
+        <h2>إعدادات عامة</h2>
+        <div class="grid grid-2">
+          <div><label>اسم العيادة</label><input id="clinicName" value="${App.settings.clinicName}" /></div>
+          <div><label>الشعار (Base64)</label><textarea id="clinicLogo">${App.settings.clinicLogo}</textarea></div>
+          <div><label>العملة</label><input id="clinicCurrency" value="${App.settings.currency}" /></div>
+          <div><label>توزيع المصروفات</label><select id="overheadAllocation"><option value="revenue" ${App.settings.overheadAllocation==='revenue'?'selected':''}>حسب الإيرادات</option><option value="equal" ${App.settings.overheadAllocation==='equal'?'selected':''}>بالتساوي</option></select></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="saveSettings()">حفظ</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>كلمات المرور</h2>
+        <div class="grid grid-2">
+          <div><label>الإعدادات</label><input id="pwdSettings" type="password" value="${App.passwords.settings}" /></div>
+          <div><label>الإقفال</label><input id="pwdClose" type="password" value="${App.passwords.close}" /></div>
+          <div><label>الإجراءات الحساسة</label><input id="pwdDanger" type="password" value="${App.passwords.danger}" /></div>
+        </div>
+        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" onclick="savePasswords()">تحديث</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>اختبار النظام</h2>
+        <button class="btn" onclick="runHealthCheck()">تشغيل</button>
+        <div id="healthReport" style="margin-top:1rem;"></div>
+      </div>
+      <div class="card">
+        <h2>دليل مختصر</h2>
+        <p>
+          • استخدم كلمات المرور لحماية الإعدادات والإقفال والإجراءات الحساسة.<br>
+          • جميع السندات تولد قيودًا مزدوجة وتظهر في دفتر اليومية.<br>
+          • زر التصدير يوفر نسخة JSON للحفظ الخارجي، وزر الاستيراد يعيدها.<br>
+          • الإقفال يتطلب كلمة المرور الخاصة ويمنع التعديل حتى إعادة فتحه بوضع حساس.<br>
+        </p>
+      </div>`;
+    }
+    Views.settings=Views_settings;
+
+    let debounceTimer;
+    function debounced(fn){
+      clearTimeout(debounceTimer);
+      debounceTimer=setTimeout(fn,250);
+    }
+
+    async function fileToBase64(file){
+      return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function saveReceipt(){
+      const patient=document.getElementById('receiptPatient').value.trim();
+      const service=document.getElementById('receiptService').value.trim();
+      const doctor=document.getElementById('receiptDoctor').value.trim();
+      const amount=parseFloat(document.getElementById('receiptAmount').value);
+      const notes=document.getElementById('receiptNotes').value.trim();
+      if(!patient||!service||isNaN(amount)||amount<=0){showToast('بيانات غير صالحة','error');return;}
+      let attachment=null;
+      const file=document.getElementById('receiptAttachment').files[0];
+      if(file){
+        if(file.size>2*1024*1024){showToast('حجم المرفق كبير','error');return;}
+        attachment=await fileToBase64(file);
+      }
+      const receipts=await Storage.load('receipts');
+      const reference=generateReference('RC');
+      const record={reference,patient,service,doctor,amount,notes,attachment,status:'active',createdAt:new Date().toISOString()};
+      try{
+        await recordJournal([
+          {account:'صندوق النقدية',debit:amount},
+          {account:`إيرادات - ${service}`,credit:amount}
+        ],{type:'receipt',reference,patient,doctor});
+      }catch(err){
+        showToast('تعذر حفظ السند بسبب خلل في القيد','error');
+        throw err;
+      }
+      receipts.push(record);
+      await Storage.save('receipts',receipts);
+      await applyReceiptToReceivables(patient,amount);
+      await logAudit('add',reference,'سند قبض',record);
+      showToast('تم حفظ السند');
+      renderReceiptsTable();
+      renderDoctorsTable();
+      renderPatientReceivables();
+      renderPatientsTable();
+      refreshMiniTrial();
+    }
+
+    async function renderReceiptsTable(){
+      const list=await Storage.load('receipts');
+      const search=(document.getElementById('receiptSearch')||{value:''}).value.trim();
+      const body=document.getElementById('receiptTable');
+      if(!body) return;
+      body.innerHTML=list.filter(r=>!search||r.reference.includes(search)).slice(-200).reverse().map(r=>`
+        <tr>
+          <td>${r.reference}</td>
+          <td>${formatDate(r.createdAt)}</td>
+          <td>${r.patient}</td>
+          <td>${r.service}</td>
+          <td>${formatCurrency(r.amount)}</td>
+          <td>${r.status==='active'?'<span class="badge">ساري</span>':'<span class="badge danger">ملغي</span>'}</td>
+          <td>
+            <button class="btn secondary" onclick="receiptPDF('${r.reference}')">PDF</button>
+            <button class="btn danger" onclick="cancelReceipt('${r.reference}')">إلغاء</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function cancelReceipt(reference){
+      guardSensitive(async()=>{
+        const list=await Storage.load('receipts');
+        const item=list.find(r=>r.reference===reference);
+        if(!item||item.status==='cancelled') return;
+        item.status='cancelled';
+        await recordJournal([
+          {account:`إيرادات - ${item.service}`,debit:item.amount},
+          {account:'صندوق النقدية',credit:item.amount}
+        ],{type:'reverse',reference});
+        await Storage.save('receipts',list);
+        await reverseReceiptFromReceivables(item.patient,item.amount);
+        await logAudit('cancel',reference,'إلغاء سند قبض');
+        showToast('تم الإلغاء');
+        renderReceiptsTable();
+        renderPatientReceivables();
+        renderPatientsTable();
+        refreshMiniTrial();
+      });
+    }
+
+    async function savePayment(){
+      const supplier=document.getElementById('paymentSupplier').value.trim();
+      const status=document.getElementById('paymentStatus').value;
+      const amount=parseFloat(document.getElementById('paymentAmount').value);
+      const notes=document.getElementById('paymentNotes').value.trim();
+      if(!supplier||isNaN(amount)||amount<=0){showToast('بيانات غير صالحة','error');return;}
+      let attachment=null;
+      const file=document.getElementById('paymentAttachment').files[0];
+      if(file){
+        if(file.size>2*1024*1024){showToast('حجم المرفق كبير','error');return;}
+        attachment=await fileToBase64(file);
+      }
+      const payments=await Storage.load('payments');
+      const reference=generateReference('PM');
+      const record={reference,supplier,status,amount,notes,attachment,state:'active',createdAt:new Date().toISOString()};
+      payments.push(record);
+      await Storage.save('payments',payments);
+      await recordJournal([
+        {account:`مصروفات - ${supplier}`,debit:amount},
+        {account:'صندوق النقدية',credit:amount}
+      ],{type:'payment',reference,supplier});
+      await logAudit('add',reference,'سند صرف',record);
+      showToast('تم حفظ السند');
+      renderPaymentsTable();
+      refreshMiniTrial();
+    }
+
+    async function renderPaymentsTable(){
+      const list=await Storage.load('payments');
+      const search=(document.getElementById('paymentSearch')||{value:''}).value.trim();
+      const body=document.getElementById('paymentTable');
+      if(!body) return;
+      body.innerHTML=list.filter(r=>!search||r.reference.includes(search)).slice(-200).reverse().map(r=>`
+        <tr>
+          <td>${r.reference}</td>
+          <td>${formatDate(r.createdAt)}</td>
+          <td>${r.supplier}</td>
+          <td>${formatCurrency(r.amount)}</td>
+          <td>${r.status==='paid'?'مدفوع':'معلّق'}</td>
+          <td>
+            <button class="btn secondary" onclick="paymentPDF('${r.reference}')">PDF</button>
+            <button class="btn danger" onclick="cancelPayment('${r.reference}')">إلغاء</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function cancelPayment(reference){
+      guardSensitive(async()=>{
+        const list=await Storage.load('payments');
+        const item=list.find(r=>r.reference===reference);
+        if(!item||item.state==='cancelled') return;
+        item.state='cancelled';
+        await Storage.save('payments',list);
+        await recordJournal([
+          {account:'صندوق النقدية',debit:item.amount},
+          {account:`مصروفات - ${item.supplier}`,credit:item.amount}
+        ],{type:'reverse',reference});
+        await logAudit('cancel',reference,'إلغاء سند صرف');
+        showToast('تم الإلغاء');
+        renderPaymentsTable();
+        refreshMiniTrial();
+      });
+    }
+
+    async function renderJournalTable(){
+      const list=await Storage.load('journals');
+      const filter=(document.getElementById('journalFilter')||{value:''}).value.trim();
+      const body=document.getElementById('journalTable');
+      if(!body) return;
+      body.innerHTML=list.filter(j=>!filter||j.id.includes(filter)||j.entries.some(e=>e.account.includes(filter))).slice(-200).reverse().map(j=>`
+        <tr>
+          <td>${j.id}</td>
+          <td>${formatDate(j.createdAt)}</td>
+          <td>${j.meta?.type||''}</td>
+          <td>${j.entries.map(e=>`<div class="flex" style="justify-content:space-between;"><span>${e.account}</span><span>${e.debit?formatCurrency(e.debit):''}</span><span>${e.credit?formatCurrency(e.credit):''}</span></div>`).join('')}</td>
+        </tr>`).join('');
+    }
+
+    async function savePatient(){
+      const name=document.getElementById('patientName').value.trim();
+      const phone=document.getElementById('patientPhone').value.trim();
+      const deposit=parseFloat(document.getElementById('patientDeposit').value||'0');
+      const notes=document.getElementById('patientNotes').value.trim();
+      if(!name){showToast('اسم المريض مطلوب','error');return;}
+      const patients=await Storage.load('patients');
+      const existing=patients.find(p=>p.name===name);
+      if(existing){
+        existing.phone=phone;
+        existing.deposit=deposit;
+        existing.notes=notes;
+      }else{
+        patients.push({name,phone,balance:0,deposit,notes,createdAt:new Date().toISOString()});
+      }
+      await Storage.save('patients',patients);
+      await logAudit('add',name,'تحديث مريض');
+      showToast('تم الحفظ');
+      renderPatientsTable();
+    }
+
+    async function renderPatientsTable(){
+      const patients=await Storage.load('patients');
+      const receivables=await Storage.load('patientReceivables');
+      const alerts=await Storage.load('medicalAlerts');
+      const body=document.getElementById('patientTable');
+      if(!body) return;
+      body.innerHTML=patients.map(p=>{
+        const outstanding=receivables.filter(r=>r.patient===p.name&&r.balance>0).reduce((s,r)=>s+r.balance,0);
+        const patientAlerts=alerts.filter(a=>a.patient===p.name);
+        return `<tr>
+          <td>${p.name}</td>
+          <td>${p.phone}</td>
+          <td>${formatCurrency(outstanding)}</td>
+          <td>${formatCurrency(p.deposit||0)}</td>
+          <td>${patientAlerts.length?`<span class="badge danger">${patientAlerts.length} تنبيه</span>`:'<span class="badge">لا توجد</span>'}</td>
+          <td><button class="btn danger" onclick="deletePatient('${p.name}')">حذف</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function updatePatientSelectors(){
+      const patients=await Storage.load('patients');
+      const options=patients.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+      ['dentalPatient','receivablePatient','alertPatient','appointmentPatient','prescriptionPatient'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el){
+          el.innerHTML=options;
+        }
+      });
+    }
+
+    function buildDentalChartGrid(teeth){
+      return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));">${DENTAL_TEETH.map(tooth=>{
+        const status=teeth[tooth]||'سليم';
+        return `<div><label>سن ${tooth}</label><select data-tooth="${tooth}" class="tooth-select">${DENTAL_STATUSES.map(s=>`<option value="${s}" ${s===status?'selected':''}>${s}</option>`).join('')}</select></div>`;
+      }).join('')}</div>`;
+    }
+
+    async function loadDentalChart(){
+      const select=document.getElementById('dentalPatient');
+      if(!select) return;
+      const patient=select.value;
+      const charts=await Storage.load('dentalCharts');
+      const record=charts.find(c=>c.patient===patient)||{teeth:{}};
+      const notes=document.getElementById('dentalNotes');
+      if(notes) notes.value=record.notes||'';
+      const container=document.getElementById('dentalChart');
+      if(container){
+        container.innerHTML=buildDentalChartGrid(record.teeth||{});
+      }
+    }
+
+    async function renderDentalChartControls(){
+      await updatePatientSelectors();
+      const select=document.getElementById('dentalPatient');
+      if(select){
+        if(!select.value&&select.options.length){select.value=select.options[0].value;}
+        select.onchange=loadDentalChart;
+      }
+      await loadDentalChart();
+    }
+
+    async function saveDentalChart(){
+      const select=document.getElementById('dentalPatient');
+      if(!select||!select.value){showToast('اختر المريض','error');return;}
+      const patient=select.value;
+      const notes=document.getElementById('dentalNotes')?.value||'';
+      const inputs=document.querySelectorAll('#dentalChart .tooth-select');
+      const teeth={};
+      inputs.forEach(sel=>{teeth[sel.dataset.tooth]=sel.value;});
+      const charts=await Storage.load('dentalCharts');
+      const existing=charts.find(c=>c.patient===patient);
+      if(existing){existing.teeth=teeth;existing.notes=notes;existing.updatedAt=new Date().toISOString();}
+      else{charts.push({patient,teeth,notes,updatedAt:new Date().toISOString()});}
+      await Storage.save('dentalCharts',charts);
+      await logAudit('update',patient,'تحديث سجل سني',{teeth});
+      showToast('تم حفظ السجل السني');
+    }
+
+    async function savePatientReceivable(){
+      const patient=document.getElementById('receivablePatient')?.value;
+      const amount=parseFloat(document.getElementById('receivableAmount')?.value||'0');
+      const due=document.getElementById('receivableDue')?.value;
+      const notes=document.getElementById('receivableNotes')?.value||'';
+      if(!patient||isNaN(amount)||amount<=0||!due){showToast('بيانات الذمة غير مكتملة','error');return;}
+      const receivables=await Storage.load('patientReceivables');
+      receivables.push({id:Date.now(),patient,amount,balance:amount,due,notes,status:'open',createdAt:new Date().toISOString()});
+      await Storage.save('patientReceivables',receivables);
+      await logAudit('add',patient,'إضافة ذمة مريض',{amount,due});
+      showToast('تم تسجيل الذمة');
+      renderPatientReceivables();
+      renderPatientsTable();
+    }
+
+    async function applyReceiptToReceivables(patient,amount){
+      if(!patient||amount<=0) return;
+      const receivables=await Storage.load('patientReceivables');
+      let remaining=amount;
+      for(const rec of receivables.filter(r=>r.patient===patient&&r.balance>0).sort((a,b)=>new Date(a.due)-new Date(b.due))){
+        if(remaining<=0) break;
+        const take=Math.min(rec.balance,remaining);
+        rec.balance-=take;
+        if(rec.balance<=0){rec.status='settled';}
+        remaining-=take;
+      }
+      await Storage.save('patientReceivables',receivables);
+    }
+
+    async function reverseReceiptFromReceivables(patient,amount){
+      if(!patient||amount<=0) return;
+      const receivables=await Storage.load('patientReceivables');
+      let remaining=amount;
+      for(const rec of receivables.filter(r=>r.patient===patient).sort((a,b)=>new Date(b.due)-new Date(a.due))){
+        if(remaining<=0) break;
+        const add=Math.min(rec.amount-rec.balance,remaining);
+        rec.balance+=add;
+        if(rec.balance>0){rec.status='open';}
+        remaining-=add;
+      }
+      await Storage.save('patientReceivables',receivables);
+    }
+
+    function receivableStatus(rec){
+      if(rec.balance<=0) return 'مسدد';
+      const diff=(new Date(rec.due)-new Date())/(1000*60*60*24);
+      if(diff<0) return 'متأخر';
+      if(diff<=7) return 'مستحق قريباً';
+      return 'نشط';
+    }
+
+    async function renderPatientReceivables(){
+      const receivables=await Storage.load('patientReceivables');
+      const body=document.getElementById('patientReceivableTable');
+      if(!body) return;
+      body.innerHTML=receivables.slice(-200).reverse().map(rec=>`
+        <tr>
+          <td>${rec.patient}</td>
+          <td>${formatCurrency(rec.amount)}</td>
+          <td>${formatCurrency(rec.balance)}</td>
+          <td>${formatDate(rec.due)}</td>
+          <td>${receivableStatus(rec)}</td>
+        </tr>`).join('');
+    }
+
+    async function saveMedicalAlert(){
+      const patient=document.getElementById('alertPatient')?.value;
+      const type=document.getElementById('alertType')?.value.trim();
+      const severity=document.getElementById('alertSeverity')?.value;
+      const notes=document.getElementById('alertNotes')?.value||'';
+      if(!patient||!type){showToast('أدخل تفاصيل التنبيه','error');return;}
+      const alerts=await Storage.load('medicalAlerts');
+      alerts.push({id:Date.now(),patient,type,severity,notes,createdAt:new Date().toISOString()});
+      await Storage.save('medicalAlerts',alerts);
+      await logAudit('add',patient,'تنبيه طبي',{type,severity});
+      showToast('تم إضافة التنبيه');
+      renderMedicalAlerts();
+      renderPatientsTable();
+    }
+
+    async function renderMedicalAlerts(){
+      const container=document.getElementById('medicalAlertsList');
+      if(!container) return;
+      const alerts=await Storage.load('medicalAlerts');
+      if(!alerts.length){container.innerHTML='<span class="badge">لا توجد تنبيهات</span>';return;}
+      container.innerHTML='<ul>'+alerts.slice(-200).reverse().map(alert=>`<li>${formatDate(alert.createdAt)} — <strong>${alert.patient}</strong> (${alert.severity}) : ${alert.type} <button class="btn danger" style="padding:.2rem .6rem;" onclick="deleteMedicalAlert(${alert.id})">حذف</button></li>`).join('')+'</ul>';
+    }
+
+    async function deleteMedicalAlert(id){
+      guardSensitive(async()=>{
+        let alerts=await Storage.load('medicalAlerts');
+        alerts=alerts.filter(a=>a.id!==id);
+        await Storage.save('medicalAlerts',alerts);
+        renderMedicalAlerts();
+        renderPatientsTable();
+      });
+    }
+
+    async function saveAppointment(){
+      await updatePatientSelectors();
+      const patient=document.getElementById('appointmentPatient')?.value;
+      const service=document.getElementById('appointmentService')?.value.trim();
+      const doctor=document.getElementById('appointmentDoctor')?.value.trim();
+      const when=document.getElementById('appointmentDate')?.value;
+      const period=document.getElementById('appointmentPeriod')?.value;
+      const status=document.getElementById('appointmentStatus')?.value;
+      const paid=parseFloat(document.getElementById('appointmentPaid')?.value||'0');
+      const due=parseFloat(document.getElementById('appointmentDue')?.value||'0');
+      const notes=document.getElementById('appointmentNotes')?.value||'';
+      if(!patient||!service||!doctor||!when){showToast('بيانات الموعد غير مكتملة','error');return;}
+      const appointments=await Storage.load('appointments');
+      const record={id:Date.now(),patient,service,doctor,date:when,period,status,paid,due,notes,createdAt:new Date().toISOString()};
+      appointments.push(record);
+      await Storage.save('appointments',appointments);
+      if(due>0){
+        const receivables=await Storage.load('patientReceivables');
+        receivables.push({id:Date.now()+1,patient,amount:due,balance:due,due:when.slice(0,10),notes:`${service} — موعد`,status:'open',createdAt:new Date().toISOString()});
+        await Storage.save('patientReceivables',receivables);
+      }
+      await logAudit('add',record.id,'موعد جديد',record);
+      showToast('تم حفظ الموعد');
+      renderAppointmentsTable();
+      renderAppointmentsTomorrow();
+      renderPatientReceivables();
+      renderPatientsTable();
+    }
+
+    async function populateAppointmentFilters(){
+      const doctorSelect=document.getElementById('appointmentFilterDoctor');
+      if(doctorSelect){
+        const doctors=await Storage.load('doctors');
+        const current=doctorSelect.value;
+        doctorSelect.innerHTML='<option value="">كل الأطباء</option>'+doctors.map(d=>`<option value="${d.name}">${d.name}</option>`).join('');
+        if(current) doctorSelect.value=current;
+      }
+    }
+
+    async function renderAppointmentsTable(){
+      await updatePatientSelectors();
+      await populateAppointmentFilters();
+      const appointments=await Storage.load('appointments');
+      const doctorFilter=document.getElementById('appointmentFilterDoctor')?.value||'';
+      const statusFilter=document.getElementById('appointmentFilterStatus')?.value||'';
+      const body=document.getElementById('appointmentsTable');
+      if(!body) return;
+      body.innerHTML=appointments.slice(-500).reverse().filter(app=>{
+        return (!doctorFilter||app.doctor===doctorFilter)&&(!statusFilter||app.status===statusFilter);
+      }).map(app=>`<tr>
+        <td>${app.patient}</td>
+        <td>${app.service}</td>
+        <td>${app.doctor}</td>
+        <td>${new Date(app.date).toLocaleString('ar-SA')}</td>
+        <td>${app.status}</td>
+        <td>${formatCurrency(app.paid||0)} / ${formatCurrency(app.due||0)}</td>
+        <td>
+          <button class="btn" onclick="markAppointment(${app.id},'completed')">تم</button>
+          <button class="btn secondary" onclick="markAppointment(${app.id},'in-progress')">قيد التنفيذ</button>
+          <button class="btn danger" onclick="markAppointment(${app.id},'cancelled')">إلغاء</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    async function markAppointment(id,status){
+      const appointments=await Storage.load('appointments');
+      const appointment=appointments.find(a=>a.id===id);
+      if(!appointment) return;
+      appointment.status=status;
+      appointment.updatedAt=new Date().toISOString();
+      await Storage.save('appointments',appointments);
+      await logAudit('update',id,'تحديث حالة موعد',{status});
+      showToast('تم تحديث الموعد');
+      renderAppointmentsTable();
+      renderAppointmentsTomorrow();
+    }
+
+    async function deletePatient(name){
+      guardSensitive(async()=>{
+        let patients=await Storage.load('patients');
+        patients=patients.filter(p=>p.name!==name);
+        await Storage.save('patients',patients);
+        await logAudit('delete',name,'حذف مريض');
+        renderPatientsTable();
+      });
+    }
+
+    async function savePurchaseInvoice(){
+      const supplier=document.getElementById('invoiceSupplier').value.trim();
+      const toStock=document.getElementById('invoiceToStock').value;
+      const amount=parseFloat(document.getElementById('invoiceAmount').value);
+      const notes=document.getElementById('invoiceNotes').value.trim();
+      if(!supplier||isNaN(amount)||amount<=0){showToast('بيانات غير صالحة','error');return;}
+      const invoices=await Storage.load('purchaseInvoices');
+      const reference=generateReference('PM');
+      const invoice={reference,supplier,toStock,amount,notes,createdAt:new Date().toISOString()};
+      invoices.push(invoice);
+      await Storage.save('purchaseInvoices',invoices);
+      if(toStock==='yes'){
+        await recordJournal([
+          {account:'المخزون',debit:amount},
+          {account:'صندوق النقدية',credit:amount}
+        ],{type:'purchase-stock',reference,supplier});
+      }else{
+        await recordJournal([
+          {account:`مصروفات - ${supplier}`,debit:amount},
+          {account:'صندوق النقدية',credit:amount}
+        ],{type:'purchase-expense',reference,supplier});
+      }
+      await logAudit('add',reference,'فاتورة مشتريات',invoice);
+      showToast('تم حفظ الفاتورة');
+      renderSupplierReturns();
+      renderInventoryTable();
+      refreshMiniTrial();
+    }
+
+    async function saveSupplierReturn(){
+      const supplier=document.getElementById('returnSupplier').value.trim();
+      const amount=parseFloat(document.getElementById('returnAmount').value);
+      const status=document.getElementById('returnStatus').value;
+      const notes=document.getElementById('returnNotes').value.trim();
+      if(!supplier||isNaN(amount)||amount<=0){showToast('بيانات غير صالحة','error');return;}
+      const returns=await Storage.load('supplierReturns');
+      const reference=generateReference('PM');
+      const record={reference,supplier,amount,status,notes,createdAt:new Date().toISOString()};
+      returns.push(record);
+      await Storage.save('supplierReturns',returns);
+      if(status==='pending'){
+        await recordJournal([
+          {account:'Supplier Credit Pending',debit:amount},
+          {account:'صندوق النقدية',credit:amount}
+        ],{type:'supplier-return',reference,supplier});
+      }else{
+        await recordJournal([
+          {account:'ذمم الموردين',debit:amount},
+          {account:'Supplier Credit Pending',credit:amount}
+        ],{type:'supplier-settlement',reference,supplier});
+      }
+      await logAudit('add',reference,'مرتجع مورد',record);
+      showToast('تم الحفظ');
+      renderSupplierReturns();
+      refreshMiniTrial();
+    }
+
+    async function renderSupplierReturns(){
+      const returns=await Storage.load('supplierReturns');
+      const body=document.getElementById('returnsTable');
+      if(!body) return;
+      body.innerHTML=returns.slice(-200).reverse().map(r=>`
+        <tr>
+          <td>${r.reference}</td>
+          <td>${r.supplier}</td>
+          <td>${formatCurrency(r.amount)}</td>
+          <td>${r.status}</td>
+          <td><button class="btn danger" onclick="deleteSupplierReturn('${r.reference}')">حذف</button></td>
+        </tr>`).join('');
+    }
+
+    async function deleteSupplierReturn(reference){
+      guardSensitive(async()=>{
+        let returns=await Storage.load('supplierReturns');
+        returns=returns.filter(r=>r.reference!==reference);
+        await Storage.save('supplierReturns',returns);
+        await logAudit('delete',reference,'حذف مرتجع');
+        renderSupplierReturns();
+      });
+    }
+
+    async function saveLabOrder(){
+      const patient=document.getElementById('labPatient').value.trim();
+      const doctor=document.getElementById('labDoctor').value.trim();
+      const service=document.getElementById('labService').value.trim();
+      const units=parseInt(document.getElementById('labUnits').value||'1');
+      const sent=document.getElementById('labSent').value;
+      const expected=document.getElementById('labExpected').value;
+      const cost=parseFloat(document.getElementById('labCost').value||'0');
+      const status=document.getElementById('labStatus').value;
+      const notes=document.getElementById('labNotes').value.trim();
+      const result=document.getElementById('labResult').value.trim();
+      let resultAttachment=null;
+      const file=document.getElementById('labResultFile').files[0];
+      if(file){
+        if(file.size>2*1024*1024){showToast('حجم مرفق النتيجة كبير','error');return;}
+        resultAttachment=await fileToBase64(file);
+      }
+      if(!patient||!service){showToast('بيانات غير صالحة','error');return;}
+      const labs=await Storage.load('labs');
+      const reference=generateReference('LB');
+      const record={reference,patient,doctor,service,units,sent,expected,cost,status,notes,result,resultAttachment,createdAt:new Date().toISOString()};
+      labs.push(record);
+      await Storage.save('labs',labs);
+      await logAudit('add',reference,'طلب معمل',record);
+      showToast('تم حفظ الطلب');
+      renderLabsTable();
+      renderDoctorsTable();
+    }
+
+    async function renderLabsTable(){
+      const labs=await Storage.load('labs');
+      const body=document.getElementById('labsTable');
+      const stats=document.getElementById('labStats');
+      const summary=labs.reduce((acc,cur)=>{acc[cur.status]=(acc[cur.status]||0)+1;return acc;},{})
+      if(stats){
+        stats.textContent=`قيد التنفيذ: ${summary['in-progress']||0} | متأخر: ${summary['delayed']||0} | تم: ${summary['done']||0}`;
+      }
+      if(!body) return;
+      body.innerHTML=labs.slice(-200).reverse().map(l=>`
+        <tr>
+          <td>${l.reference}</td>
+          <td>${l.patient}</td>
+          <td>${l.service}</td>
+          <td>${l.status}</td>
+          <td>${formatCurrency(l.cost||0)}</td>
+          <td>${l.result?'<span class="badge">متوفر</span>':'-'}</td>
+          <td><button class="btn secondary" onclick="labOrderPDF('${l.reference}')">PDF</button></td>
+        </tr>`).join('');
+    }
+
+    function inventoryAlert(item){
+      const low=item.qty<=item.min;
+      let expiryAlert=false;
+      if(item.expiry){
+        const diff=(new Date(item.expiry)-new Date())/(1000*60*60*24*30);
+        expiryAlert=diff<=6;
+      }
+      if(low&&expiryAlert) return 'كمية منخفضة وصلاحية قريبة';
+      if(low) return 'كمية منخفضة';
+      if(expiryAlert) return 'الصلاحية قريبة';
+      return '';
+    }
+
+    async function saveInventoryItem(){
+      const name=document.getElementById('itemName').value.trim();
+      const qty=parseFloat(document.getElementById('itemQty').value||'0');
+      const min=parseFloat(document.getElementById('itemMin').value||'0');
+      const expiry=document.getElementById('itemExpiry').value;
+      if(!name){showToast('اسم المادة مطلوب','error');return;}
+      const inventory=await Storage.load('inventory');
+      const existing=inventory.find(i=>i.name===name);
+      if(existing){
+        existing.qty=qty;existing.min=min;existing.expiry=expiry;
+      }else{
+        inventory.push({name,qty,min,expiry,createdAt:new Date().toISOString()});
+      }
+      await Storage.save('inventory',inventory);
+      await logAudit('add',name,'تحديث مادة');
+      showToast('تم الحفظ');
+      renderInventoryTable();
+    }
+
+    async function renderInventoryTable(){
+      const inventory=await Storage.load('inventory');
+      const body=document.getElementById('inventoryTable');
+      if(!body) return;
+      body.innerHTML=inventory.map(item=>{
+        const alert=inventoryAlert(item);
+        return `<tr>
+          <td>${item.name}</td>
+          <td>${item.qty}</td>
+          <td>${item.min}</td>
+          <td>${item.expiry?formatDate(item.expiry):'-'}</td>
+          <td>${alert?`<span class="badge danger">${alert}</span>`:'<span class="badge">جيد</span>'}</td>
+          <td><button class="btn danger" onclick="deleteInventoryItem('${item.name}')">حذف</button></td>
+        </tr>`;
+      }).join('');
+      renderInventoryAlerts();
+    }
+
+    async function deleteInventoryItem(name){
+      guardSensitive(async()=>{
+        let inventory=await Storage.load('inventory');
+        inventory=inventory.filter(i=>i.name!==name);
+        await Storage.save('inventory',inventory);
+        await logAudit('delete',name,'حذف مادة');
+        renderInventoryTable();
+      });
+    }
+
+    async function renderInventoryAlerts(){
+      const inventory=await Storage.load('inventory');
+      const container=document.getElementById('inventoryAlerts');
+      if(!container) return;
+      const alerts=inventory.filter(i=>inventoryAlert(i));
+      if(!alerts.length){container.innerHTML='<span class="badge">لا توجد تنبيهات</span>';return;}
+      container.innerHTML='<ul>'+alerts.map(a=>`<li>${a.name} — ${inventoryAlert(a)}</li>`).join('')+'</ul>';
+    }
+
+    function advanceExpenseDue(item){
+      if(!item.nextDue) return;
+      const due=new Date(item.nextDue);
+      if(item.frequency==='monthly') due.setMonth(due.getMonth()+1);
+      if(item.frequency==='quarterly') due.setMonth(due.getMonth()+3);
+      if(item.frequency==='yearly') due.setFullYear(due.getFullYear()+1);
+      item.nextDue=due.toISOString().slice(0,10);
+    }
+
+    function expenseStatus(item){
+      if(!item.nextDue) return 'غير محدد';
+      const diff=(new Date(item.nextDue)-new Date())/(1000*60*60*24);
+      if(diff<0) return 'مستحق';
+      if(diff<=7) return 'قريب';
+      return 'مستقبلي';
+    }
+
+    async function saveRecurringExpense(){
+      const name=document.getElementById('expenseName')?.value.trim();
+      const amount=parseFloat(document.getElementById('expenseAmount')?.value||'0');
+      const frequency=document.getElementById('expenseFrequency')?.value;
+      const nextDue=document.getElementById('expenseNextDue')?.value;
+      const costCenter=document.getElementById('expenseCostCenter')?.value||'';
+      if(!name||isNaN(amount)||amount<=0||!nextDue){showToast('بيانات المصروف غير مكتملة','error');return;}
+      const expenses=await Storage.load('operatingExpenses');
+      const existing=expenses.find(e=>e.name===name&&e.costCenter===costCenter);
+      if(existing){existing.amount=amount;existing.frequency=frequency;existing.nextDue=nextDue;existing.costCenter=costCenter;}
+      else{expenses.push({id:Date.now(),name,amount,frequency,nextDue,costCenter,active:true});}
+      await Storage.save('operatingExpenses',expenses);
+      await logAudit('add',name,'مصروف تشغيلي',{amount,frequency});
+      showToast('تم حفظ المصروف');
+      renderOperatingExpenses();
+    }
+
+    async function renderOperatingExpenses(){
+      const expenses=await Storage.load('operatingExpenses');
+      const body=document.getElementById('operatingExpensesTable');
+      if(!body) return;
+      body.innerHTML=expenses.map(item=>`
+        <tr>
+          <td>${item.name}</td>
+          <td>${formatCurrency(item.amount)}</td>
+          <td>${item.frequency}</td>
+          <td>${item.nextDue?formatDate(item.nextDue):'-'}</td>
+          <td>${item.costCenter||'-'}</td>
+          <td>${expenseStatus(item)}</td>
+        </tr>`).join('');
+    }
+
+    async function postRecurringExpenses(){
+      const expenses=await Storage.load('operatingExpenses');
+      const dueExpenses=expenses.filter(item=>item.active&&item.nextDue&&new Date(item.nextDue)<=new Date());
+      if(!dueExpenses.length){showToast('لا توجد مصروفات مستحقة للترحيل','error');return;}
+      for(const item of dueExpenses){
+        try{
+          await recordJournal([
+            {account:`مصروفات تشغيلية - ${item.name}`,debit:item.amount},
+            {account:'مصروفات مستحقة',credit:item.amount}
+          ],{type:'operating-expense',item:item.name,costCenter:item.costCenter});
+          advanceExpenseDue(item);
+        }catch(err){
+          showToast(`تعذر ترحيل ${item.name}`,'error');
+        }
+      }
+      await Storage.save('operatingExpenses',expenses);
+      await logAudit('process','expenses','ترحيل مصروفات',{count:dueExpenses.length});
+      renderOperatingExpenses();
+      refreshMiniTrial();
+      showToast('تم ترحيل المصروفات المستحقة');
+    }
+
+    async function saveFixedAsset(){
+      const name=document.getElementById('assetName')?.value.trim();
+      const purchase=document.getElementById('assetPurchase')?.value;
+      const cost=parseFloat(document.getElementById('assetCost')?.value||'0');
+      const lifeMonths=parseInt(document.getElementById('assetLife')?.value||'0',10);
+      const center=document.getElementById('assetCenter')?.value||'';
+      if(!name||!purchase||isNaN(cost)||cost<=0||!lifeMonths){showToast('بيانات الأصل غير مكتملة','error');return;}
+      const assets=await Storage.load('fixedAssets');
+      const existing=assets.find(a=>a.name===name);
+      if(existing){existing.purchase=purchase;existing.cost=cost;existing.lifeMonths=lifeMonths;existing.center=center;}
+      else{assets.push({id:Date.now(),name,purchase,cost,lifeMonths,center,accumulated:0,lastDepreciation:null});}
+      await Storage.save('fixedAssets',assets);
+      await logAudit('add',name,'تسجيل أصل ثابت',{cost,lifeMonths});
+      showToast('تم حفظ الأصل');
+      renderFixedAssets();
+    }
+
+    async function renderFixedAssets(){
+      const assets=await Storage.load('fixedAssets');
+      const body=document.getElementById('fixedAssetsTable');
+      if(!body) return;
+      body.innerHTML=assets.map(asset=>{
+        const monthly=asset.lifeMonths?asset.cost/asset.lifeMonths:0;
+        return `<tr>
+          <td>${asset.name}</td>
+          <td>${formatCurrency(asset.cost)}</td>
+          <td>${formatCurrency(monthly)}</td>
+          <td>${formatCurrency(asset.accumulated||0)}</td>
+          <td>${asset.lastDepreciation||'-'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function postMonthlyDepreciation(){
+      const assets=await Storage.load('fixedAssets');
+      if(!assets.length){showToast('لا توجد أصول','error');return;}
+      const now=new Date();
+      const period=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      let processed=0;
+      for(const asset of assets){
+        if(asset.lastDepreciation===period) continue;
+        if(new Date(asset.purchase)>now) continue;
+        const monthly=asset.lifeMonths?asset.cost/asset.lifeMonths:0;
+        if(monthly<=0) continue;
+        const remaining=asset.cost-(asset.accumulated||0);
+        if(remaining<=0) continue;
+        const amount=Math.min(monthly,remaining);
+        try{
+          await recordJournal([
+            {account:'مصروف إهلاك',debit:amount},
+            {account:`مجمع الإهلاك - ${asset.name}`,credit:amount}
+          ],{type:'depreciation',asset:asset.name,period});
+          asset.accumulated=(asset.accumulated||0)+amount;
+          asset.lastDepreciation=period;
+          processed++;
+        }catch(err){
+          showToast(`فشل إهلاك الأصل ${asset.name}`,'error');
+        }
+      }
+      await Storage.save('fixedAssets',assets);
+      if(processed){
+        await logAudit('process','depreciation','إهلاك شهري',{count:processed,period});
+        showToast('تم تسجيل إهلاك الشهر');
+        renderFixedAssets();
+        refreshMiniTrial();
+      }else{
+        showToast('لا توجد أصول مستحقة للإهلاك','error');
+      }
+    }
+
+    async function summarizePeriod(start,end){
+      const journals=await Storage.load('journals');
+      const summary={revenue:0,expenses:0};
+      journals.filter(j=>{
+        const time=new Date(j.createdAt);
+        return time>=start&&time<=end;
+      }).forEach(j=>{
+        j.entries.forEach(e=>{
+          const account=e.account||'';
+          const debit=e.debit||0;
+          const credit=e.credit||0;
+          if(account.includes('إيرادات')||account.toLowerCase().includes('revenue')){
+            summary.revenue+=credit-debit;
+          }
+          if(account.includes('مصروف')||account.toLowerCase().includes('expense')){
+            summary.expenses+=debit-credit;
+          }
+        });
+      });
+      return summary;
+    }
+
+    async function renderPeriodClosings(){
+      const closings=await Storage.load('periodClosings');
+      const body=document.getElementById('periodClosingsTable');
+      if(!body) return;
+      body.innerHTML=closings.slice(-50).reverse().map(row=>`
+        <tr>
+          <td>${row.period}</td>
+          <td>${row.type==='month'?'شهري':'سنوي'}</td>
+          <td>${formatCurrency(row.revenue)}</td>
+          <td>${formatCurrency(row.expenses)}</td>
+          <td>${formatCurrency(row.net)}</td>
+        </tr>`).join('');
+    }
+
+    async function closeMonth(){
+      promptPassword('close',async()=>{
+        const now=new Date();
+        const start=new Date(now.getFullYear(),now.getMonth(),1);
+        const end=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
+        const period=`${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}`;
+        const closings=await Storage.load('periodClosings');
+        if(closings.find(c=>c.period===period&&c.type==='month')){showToast('هذا الشهر مغلق بالفعل','error');return;}
+        const summary=await summarizePeriod(start,end);
+        const net=summary.revenue-summary.expenses;
+        if(Math.abs(net)>0.01){
+          const entry=net>=0?
+            [
+              {account:'ملخص الدخل',debit:net},
+              {account:'أرباح محتجزة',credit:net}
+            ]:
+            [
+              {account:'أرباح محتجزة',debit:Math.abs(net)},
+              {account:'ملخص الدخل',credit:Math.abs(net)}
+            ];
+          await recordJournal(entry,{type:'monthly-close',period});
+        }
+        closings.push({id:Date.now(),period,type:'month',revenue:summary.revenue,expenses:summary.expenses,net,createdAt:new Date().toISOString()});
+        await Storage.save('periodClosings',closings);
+        await logAudit('close',`month-${period}`,'إقفال شهر',{net});
+        showToast('تم إقفال الشهر');
+        renderPeriodClosings();
+        refreshMiniTrial();
+      });
+    }
+
+    async function closeYear(){
+      promptPassword('close',async()=>{
+        const now=new Date();
+        const start=new Date(now.getFullYear(),0,1);
+        const end=new Date(now.getFullYear(),11,31,23,59,59);
+        const period=`${start.getFullYear()}`;
+        const closings=await Storage.load('periodClosings');
+        if(closings.find(c=>c.period===period&&c.type==='year')){showToast('هذه السنة مغلقة','error');return;}
+        const summary=await summarizePeriod(start,end);
+        const net=summary.revenue-summary.expenses;
+        if(Math.abs(net)>0.01){
+          const entry=net>=0?
+            [
+              {account:'ملخص الدخل السنوي',debit:net},
+              {account:'أرباح محتجزة',credit:net}
+            ]:
+            [
+              {account:'أرباح محتجزة',debit:Math.abs(net)},
+              {account:'ملخص الدخل السنوي',credit:Math.abs(net)}
+            ];
+          await recordJournal(entry,{type:'yearly-close',period});
+        }
+        closings.push({id:Date.now(),period,type:'year',revenue:summary.revenue,expenses:summary.expenses,net,createdAt:new Date().toISOString()});
+        await Storage.save('periodClosings',closings);
+        await logAudit('close',`year-${period}`,'إقفال سنة',{net});
+        showToast('تم إقفال السنة');
+        renderPeriodClosings();
+        refreshMiniTrial();
+      });
+    }
+
+    async function saveDoctor(){
+      const name=document.getElementById('doctorName').value.trim();
+      const share=parseFloat(document.getElementById('doctorShare').value);
+      if(!name||isNaN(share)||share<30||share>50){showToast('النسبة بين 30-50','error');return;}
+      const doctors=await Storage.load('doctors');
+      const existing=doctors.find(d=>d.name===name);
+      if(existing){existing.share=share;}else{doctors.push({name,share,createdAt:new Date().toISOString()});}
+      await Storage.save('doctors',doctors);
+      await logAudit('add',name,'تحديث طبيب');
+      showToast('تم الحفظ');
+      renderDoctorsTable();
+    }
+
+    async function calculateOverheads(){
+      const doctors=await Storage.load('doctors');
+      const receipts=await Storage.load('receipts');
+      const totalOverhead=await estimateTotalOverheads();
+      const revenueByDoctor={};
+      doctors.forEach(doc=>{
+        revenueByDoctor[doc.name]=receipts.filter(r=>r.doctor===doc.name&&r.status==='active').reduce((s,r)=>s+r.amount,0);
+      });
+      const totalRevenue=Object.values(revenueByDoctor).reduce((s,v)=>s+v,0);
+      const allocation={};
+      doctors.forEach(doc=>{
+        if(App.settings.overheadAllocation==='equal'){
+          allocation[doc.name]=doctors.length?totalOverhead/doctors.length:0;
+        }else{
+          allocation[doc.name]=totalRevenue?totalOverhead*(revenueByDoctor[doc.name]||0)/totalRevenue:0;
+        }
+      });
+      return allocation;
+    }
+
+    async function estimateTotalOverheads(){
+      const payments=await Storage.load('payments');
+      return payments.reduce((s,p)=>s+(p.amount||0),0)*0.2;
+    }
+
+    async function renderDoctorsTable(){
+      const doctors=await Storage.load('doctors');
+      const receipts=await Storage.load('receipts');
+      const labs=await Storage.load('labs');
+      const overheads=await calculateOverheads();
+      const body=document.getElementById('doctorTable');
+      if(!body) return;
+      body.innerHTML=doctors.map(doc=>{
+        const revenue=receipts.filter(r=>r.doctor===doc.name&&r.status==='active').reduce((s,r)=>s+r.amount,0);
+        const labCost=labs.filter(l=>l.doctor===doc.name).reduce((s,l)=>s+(l.cost||0),0);
+        const net=revenue-labCost;
+        const doctorShare=net*(doc.share/100);
+        const clinicShare=net-doctorShare;
+        const overheadShare=overheads[doc.name]||0;
+        const contribution=clinicShare-overheadShare;
+        const badgeClass=contribution>=0?'badge':'badge danger';
+        return `<tr>
+          <td>${doc.name}</td>
+          <td>${formatCurrency(revenue)}</td>
+          <td>${formatCurrency(labCost)}</td>
+          <td>${doc.share}%</td>
+          <td>${formatCurrency(doctorShare)}</td>
+          <td><span class="${badgeClass}">${formatCurrency(contribution)}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function savePrescription(){
+      await updatePatientSelectors();
+      const patient=document.getElementById('prescriptionPatient')?.value;
+      const doctor=document.getElementById('prescriptionDoctor')?.value.trim();
+      const date=document.getElementById('prescriptionDate')?.value;
+      const duration=parseInt(document.getElementById('prescriptionDuration')?.value||'0',10);
+      const notes=document.getElementById('prescriptionNotes')?.value||'';
+      if(!patient||!doctor||!date||!duration||duration<=0||!notes.trim()){showToast('أكمل بيانات الوصفة','error');return;}
+      const prescriptions=await Storage.load('prescriptions');
+      const record={id:Date.now(),patient,doctor,date,duration,notes,createdAt:new Date().toISOString()};
+      prescriptions.push(record);
+      await Storage.save('prescriptions',prescriptions);
+      await logAudit('add',record.id,'وصفة طبية',record);
+      showToast('تم حفظ الوصفة');
+      renderPrescriptionsTable();
+    }
+
+    async function renderPrescriptionsTable(){
+      const prescriptions=await Storage.load('prescriptions');
+      const body=document.getElementById('prescriptionsTable');
+      if(!body) return;
+      body.innerHTML=prescriptions.slice(-200).reverse().map(p=>`
+        <tr>
+          <td>${p.patient}</td>
+          <td>${p.doctor}</td>
+          <td>${formatDate(p.date)}</td>
+          <td>${p.duration} يوم</td>
+          <td>
+            <button class="btn secondary" onclick="prescriptionPDF(${p.id})">PDF</button>
+            <button class="btn danger" onclick="deletePrescription(${p.id})">حذف</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function prescriptionPDF(id){
+      const prescriptions=await Storage.load('prescriptions');
+      const pres=prescriptions.find(p=>p.id===id);
+      if(!pres) return;
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text(App.settings.clinicName,14,20);
+      doc.text('وصفة طبية',14,30);
+      doc.autoTable({startY:40,head:[['الحقل','القيمة']],body:[
+        ['المريض',pres.patient],
+        ['الطبيب',pres.doctor],
+        ['التاريخ',formatDate(pres.date)],
+        ['مدة الاستخدام',`${pres.duration} يوم`],
+        ['التعليمات',pres.notes]
+      ]});
+      doc.save(`prescription-${pres.patient}-${pres.date}.pdf`);
+    }
+
+    async function deletePrescription(id){
+      guardSensitive(async()=>{
+        let prescriptions=await Storage.load('prescriptions');
+        prescriptions=prescriptions.filter(p=>p.id!==id);
+        await Storage.save('prescriptions',prescriptions);
+        renderPrescriptionsTable();
+      });
+    }
+
+    async function saveBankReconciliation(){
+      const date=document.getElementById('reconDate')?.value;
+      const bank=parseFloat(document.getElementById('reconBank')?.value||'0');
+      const books=parseFloat(document.getElementById('reconBooks')?.value||'0');
+      const notes=document.getElementById('reconNotes')?.value||'';
+      if(!date){showToast('أدخل تاريخ التسوية','error');return;}
+      const reconciliations=await Storage.load('bankReconciliations');
+      reconciliations.push({id:Date.now(),date,bank,books,difference:bank-books,notes,reviewed:false,createdAt:new Date().toISOString()});
+      await Storage.save('bankReconciliations',reconciliations);
+      await logAudit('add',date,'تسوية بنكية',{bank,books});
+      showToast('تم حفظ التسوية');
+      renderBankReconciliations();
+    }
+
+    async function renderBankReconciliations(){
+      const reconciliations=await Storage.load('bankReconciliations');
+      const body=document.getElementById('bankReconciliationTable');
+      if(!body) return;
+      body.innerHTML=reconciliations.slice(-100).reverse().map(r=>`
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td>${formatCurrency(r.bank||0)}</td>
+          <td>${formatCurrency(r.books||0)}</td>
+          <td>${formatCurrency(r.difference||0)}</td>
+          <td>${r.reviewed?'<span class="badge">مراجَع</span>':'<span class="badge danger">بانتظار المراجعة</span>'}</td>
+          <td>${r.reviewed?'':`<button class="btn" onclick="markReconciliationReviewed(${r.id})">اعتماد</button>`}</td>
+        </tr>`).join('');
+    }
+
+    async function markReconciliationReviewed(id){
+      guardSensitive(async()=>{
+        const reconciliations=await Storage.load('bankReconciliations');
+        const item=reconciliations.find(r=>r.id===id);
+        if(!item) return;
+        item.reviewed=true;
+        item.reviewedAt=new Date().toISOString();
+        await Storage.save('bankReconciliations',reconciliations);
+        await logAudit('update',id,'اعتماد تسوية بنكية');
+        renderBankReconciliations();
+      });
+    }
+
+    async function runInternalReview(){
+      const results=[];
+      const journals=await Storage.load('journals');
+      const totals=computeLedgerTotals(journals);
+      const balanced=Math.abs(totals.debit-totals.credit)<0.05;
+      results.push({label:'اتزان القيود',status:balanced?'ok':'fail',detail:`مدين ${formatCurrency(totals.debit)} / دائن ${formatCurrency(totals.credit)}`});
+      const receivables=await Storage.load('patientReceivables');
+      const overdue=receivables.filter(r=>r.balance>0&&new Date(r.due)<new Date());
+      results.push({label:'ذمم متأخرة',status:overdue.length?'fail':'ok',detail:overdue.length?`${overdue.length} ذمة متأخرة`:'لا يوجد'});
+      const reconciliations=await Storage.load('bankReconciliations');
+      const pending=reconciliations.filter(r=>!r.reviewed);
+      results.push({label:'تسويات بنكية معلقة',status:pending.length?'warn':'ok',detail:pending.length?`${pending.length} تسوية تنتظر الاعتماد`:'جميع التسويات معتمدة'});
+      const expenses=await Storage.load('operatingExpenses');
+      const dueExpenses=expenses.filter(item=>item.active&&item.nextDue&&new Date(item.nextDue)<=new Date());
+      results.push({label:'مصروفات مستحقة',status:dueExpenses.length?'warn':'ok',detail:dueExpenses.length?`${dueExpenses.length} مصروف مستحق للترحيل`:'لا يوجد'});
+      const container=document.getElementById('internalReviewReport');
+      if(container){
+        container.innerHTML='<ul>'+results.map(r=>`<li>${r.status==='ok'?'✅':r.status==='warn'?'⚠️':'❌'} ${r.label} — ${r.detail}</li>`).join('')+'</ul>';
+      }
+      await logAudit('process','internal-review','تشغيل مراجعة داخلية',results);
+      showToast(results.every(r=>r.status==='ok')?'المراجعة سليمة':'راجع النتائج',results.every(r=>r.status==='ok')?'success':'error');
+    }
+
+    async function saveSettings(){
+      App.settings.clinicName=document.getElementById('clinicName').value.trim();
+      App.settings.clinicLogo=document.getElementById('clinicLogo').value.trim();
+      App.settings.currency=document.getElementById('clinicCurrency').value.trim()||'SAR';
+      App.settings.overheadAllocation=document.getElementById('overheadAllocation').value;
+      await Storage.save('settings',{...App.settings,passwords:App.passwords});
+      showToast('تم حفظ الإعدادات');
+      renderDoctorsTable();
+      refreshMiniTrial();
+    }
+
+    async function savePasswords(){
+      App.passwords.settings=document.getElementById('pwdSettings').value;
+      App.passwords.close=document.getElementById('pwdClose').value;
+      App.passwords.danger=document.getElementById('pwdDanger').value;
+      await Storage.save('settings',{...App.settings,passwords:App.passwords});
+      showToast('تم تحديث كلمات المرور');
+    }
+
+    async function exportDataJSON(){
+      const data={
+        settings:App.settings,
+        passwords:App.passwords,
+        referenceCounters:App.counters,
+        receipts:await Storage.load('receipts'),
+        payments:await Storage.load('payments'),
+        journals:await Storage.load('journals'),
+        patients:await Storage.load('patients'),
+        purchaseInvoices:await Storage.load('purchaseInvoices'),
+        supplierReturns:await Storage.load('supplierReturns'),
+        labs:await Storage.load('labs'),
+        inventory:await Storage.load('inventory'),
+        doctors:await Storage.load('doctors'),
+        audit:await Storage.load('audit'),
+        appointments:await Storage.load('appointments')
+      };
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`MyClinicDB-backup-${new Date().toISOString()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('تم إنشاء ملف النسخة الاحتياطية');
+    }
+
+    function importDataJSON(){
+      const input=document.createElement('input');
+      input.type='file';
+      input.accept='application/json';
+      input.onchange=async()=>{
+        const file=input.files[0];
+        if(!file) return;
+        try{
+          const text=await file.text();
+          const data=JSON.parse(text);
+          await Storage.save('settings',{...App.settings,...data.settings,passwords:data.passwords||App.passwords});
+          App.settings={...App.settings,...data.settings};
+          App.passwords={...App.passwords,...(data.passwords||{})};
+          App.counters=data.referenceCounters||{};
+          await Storage.save('referenceCounters',App.counters);
+          const keys=['receipts','payments','journals','patients','purchaseInvoices','supplierReturns','labs','inventory','doctors','audit','appointments'];
+          for(const key of keys){
+            await Storage.save(key,data[key]||[]);
+          }
+          showToast('تم الاستيراد بنجاح');
+          switchView(App.view);
+          refreshMiniTrial();
+        }catch(err){
+          console.error(err);
+          showToast('فشل الاستيراد','error');
+        }
+      };
+      input.click();
+    }
+
+    async function searchReference(){
+      const ref=document.getElementById('referenceSearch').value.trim();
+      const result=document.getElementById('referenceResult');
+      if(!ref){result.textContent='';return;}
+      const collections=['receipts','payments','journals','supplierReturns','labs','purchaseInvoices'];
+      for(const name of collections){
+        const list=await Storage.load(name);
+        const found=list.find(item=>(item.reference||item.id)===ref);
+        if(found){
+          result.innerHTML=`<div class="card"><strong>المجموعة:</strong> ${name}<br><pre>${JSON.stringify(found,null,2)}</pre></div>`;
+          return;
+        }
+      }
+      result.innerHTML='<div class="badge danger">لم يتم العثور على المرجع</div>';
+    }
+
+    async function refreshMiniTrial(){
+      const journals=await Storage.load('journals');
+      const patients=await Storage.load('patients');
+      const trial={Cashbox:0,AR:0,AP:0,Revenues:0,Expenses:0,Deposits:patients.reduce((s,p)=>s+(p.deposit||0),0),OnHold:0};
+      journals.forEach(j=>{
+        j.entries.forEach(e=>{
+          const account=e.account||'';
+          const debit=e.debit||0;
+          const credit=e.credit||0;
+          const delta=debit-credit;
+          if(account.includes('صندوق')||account.toLowerCase().includes('cash')) trial.Cashbox+=delta;
+          else if(account.includes('ذمم المرضى')||account.includes('AR')) trial.AR+=delta;
+          else if(account.includes('ذمم الموردين')||account.includes('AP')) trial.AP+=credit-debit;
+          else if(account.includes('إيرادات')||account.toLowerCase().includes('revenue')) trial.Revenues+=credit-debit;
+          else if(account.includes('مصروف')||account.toLowerCase().includes('expense')||account.includes('إهلاك')) trial.Expenses+=debit-credit;
+          else if(account.includes('أمانات')||account.toLowerCase().includes('deposit')) trial.Deposits+=delta;
+          else if(account.toLowerCase().includes('pending')||account.includes('معلق')) trial.OnHold+=credit-debit;
+        });
+      });
+      const totals=computeLedgerTotals(journals);
+      const balanced=Math.abs(totals.debit-totals.credit)<0.05;
+      const mini=document.getElementById('miniTrial');
+      if(!mini) return;
+      const rows=Object.entries(trial).map(([k,v])=>{
+        const debit=v>0?formatCurrency(v):'';
+        const credit=v<0?formatCurrency(Math.abs(v)):'';
+        return `<tr><td>${k}</td><td>${debit}</td><td>${credit}</td><td>${formatCurrency(v)}</td></tr>`;
+      }).join('');
+      mini.innerHTML=`<table><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>صافي</th></tr></thead><tbody>${rows}</tbody></table><div class="badge" style="margin-top:1rem;">اتزان: ${balanced?'✔️':'❌'}</div>`;
+    }
+
+    async function renderDashboardWidgets(){
+      refreshMiniTrial();
+      renderInventoryAlerts();
+      renderAppointmentsTomorrow();
+      await renderPeriodCard('morning');
+      await renderPeriodCard('evening');
+    }
+
+    async function renderAppointmentsTomorrow(){
+      const appointments=await Storage.load('appointments');
+      const container=document.getElementById('appointmentsTomorrow');
+      if(!container) return;
+      const tomorrow=new Date();
+      tomorrow.setDate(tomorrow.getDate()+1);
+      const target=appointments.filter(a=>new Date(a.date).toDateString()===tomorrow.toDateString());
+      if(!target.length){container.innerHTML='<span class="badge">لا توجد مواعيد</span>';return;}
+      container.innerHTML='<table><thead><tr><th>المريض</th><th>الخدمة</th><th>الطبيب</th><th>الحالة</th><th>المدفوع/المتبقي</th></tr></thead><tbody>'+target.map(a=>`<tr><td>${a.patient}</td><td>${a.service}</td><td>${a.doctor}</td><td>${a.status}</td><td>${formatCurrency(a.paid||0)} / ${formatCurrency(a.due||0)}</td></tr>`).join('')+'</tbody></table>';
+    }
+
+    async function renderPeriodCard(period){
+      const container=document.getElementById(period==='morning'?'periodMorning':'periodEvening');
+      if(!container) return;
+      const closures=await Storage.load('closures');
+      const today=new Date().toISOString().slice(0,10);
+      const record=closures.find(c=>c.date===today&&c.period===period);
+      if(!record){
+        container.innerHTML='<div class="badge">لم يتم الإقفال بعد</div>';
+        return;
+      }
+      container.innerHTML=`<div class="badge ${record.locked?'':'danger'}">${record.locked?'مقفول':'مفتوح'} — ${formatCurrency(record.total)}</div>`;
+    }
+
+    function closePeriod(period){
+      promptPassword('close',async()=>{
+        const closures=await Storage.load('closures');
+        const receipts=await Storage.load('receipts');
+        const payments=await Storage.load('payments');
+        const now=new Date();
+        const today=now.toISOString().slice(0,10);
+        const totalIn=receipts.filter(r=>r.status==='active').reduce((s,r)=>s+r.amount,0);
+        const totalOut=payments.filter(p=>p.state!=='cancelled').reduce((s,p)=>s+p.amount,0);
+        const total=totalIn-totalOut;
+        const existing=closures.find(c=>c.date===today&&c.period===period);
+        if(existing){existing.total=total;existing.locked=true;}else{closures.push({date:today,period,total,locked:true,createdAt:new Date().toISOString()});}
+        await Storage.save('closures',closures);
+        await logAudit('close',`${today}-${period}`,'إقفال فترة',{total});
+        showToast('تم إقفال الفترة');
+        renderPeriodCard(period);
+        await exportPeriodPDF(period,true);
+      });
+    }
+
+    async function exportPeriodPDF(period,silent){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.setFont('helvetica','bold');
+      doc.text(`${App.settings.clinicName}`,14,20);
+      doc.setFontSize(12);
+      doc.text(`تقرير فترة ${period==='morning'?'صباح':'مساء'}`,14,30);
+      const receipts=await Storage.load('receipts');
+      const payments=await Storage.load('payments');
+      const totalIn=receipts.filter(r=>r.status==='active').reduce((s,r)=>s+r.amount,0);
+      const totalOut=payments.filter(p=>p.state!=='cancelled').reduce((s,p)=>s+p.amount,0);
+      doc.autoTable({startY:40,head:[['البند','القيمة']],body:[['إجمالي المدخول',formatCurrency(totalIn)],['إجمالي المخروج',formatCurrency(totalOut)],['الصافي',formatCurrency(totalIn-totalOut)]]});
+      doc.save(`period-${period}-${new Date().toISOString().slice(0,10)}.pdf`);
+      if(!silent) showToast('تم إنشاء ملف PDF');
+    }
+
+    async function miniTrialPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('الميزان المصغر',14,20);
+      const receipts=await Storage.load('receipts');
+      const payments=await Storage.load('payments');
+      const data=[['Cashbox',formatCurrency(receipts.reduce((s,r)=>s+r.amount,0)-payments.reduce((s,p)=>s+p.amount,0))]];
+      doc.autoTable({startY:30,head:[['الحساب','الصافي']],body:data});
+      doc.save('mini-trial.pdf');
+    }
+
+    async function appointmentsPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('مواعيد الغد',14,20);
+      const appointments=await Storage.load('appointments');
+      const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
+      const rows=appointments.filter(a=>new Date(a.date).toDateString()===tomorrow.toDateString()).map(a=>[a.patient,a.service,a.doctor,a.status,`${formatCurrency(a.paid||0)} / ${formatCurrency(a.due||0)}`]);
+      doc.autoTable({startY:30,head:[['المريض','الخدمة','الطبيب','الحالة','المدفوع/المتبقي']],body:rows});
+      doc.save('appointments-tomorrow.pdf');
+    }
+
+    async function inventoryAlertsPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('تنبيهات المخزون',14,20);
+      const inventory=await Storage.load('inventory');
+      const rows=inventory.filter(i=>inventoryAlert(i)).map(i=>[i.name,inventoryAlert(i)]);
+      doc.autoTable({startY:30,head:[['المادة','التنبيه']],body:rows});
+      doc.save('inventory-alerts.pdf');
+    }
+
+    async function receiptPDF(reference){
+      const receipts=await Storage.load('receipts');
+      const receipt=receipts.find(r=>r.reference===reference);
+      if(!receipt) return;
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text(App.settings.clinicName,14,20);
+      doc.text(`سند قبض ${reference}`,14,30);
+      doc.autoTable({startY:40,head:[['الحقل','القيمة']],body:[['المريض',receipt.patient],['الخدمة',receipt.service],['الطبيب',receipt.doctor],['المبلغ',formatCurrency(receipt.amount)],['التاريخ',formatDate(receipt.createdAt)],['ملاحظات',receipt.notes||'-']]});
+      if(receipt.attachment) doc.text('مرفق مضمّن',14,doc.lastAutoTable.finalY+10);
+      doc.save(`${reference}.pdf`);
+    }
+
+    async function paymentPDF(reference){
+      const payments=await Storage.load('payments');
+      const payment=payments.find(r=>r.reference===reference);
+      if(!payment) return;
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text(App.settings.clinicName,14,20);
+      doc.text(`سند صرف ${reference}`,14,30);
+      doc.autoTable({startY:40,head:[['الحقل','القيمة']],body:[['المورد',payment.supplier],['المبلغ',formatCurrency(payment.amount)],['الحالة',payment.status],['التاريخ',formatDate(payment.createdAt)],['ملاحظات',payment.notes||'-']]});
+      doc.save(`${reference}.pdf`);
+    }
+
+    async function labOrderPDF(reference){
+      const labs=await Storage.load('labs');
+      const lab=labs.find(l=>l.reference===reference);
+      if(!lab) return;
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('طلب معمل',14,20);
+      doc.text(reference,14,28);
+      doc.autoTable({startY:34,head:[['الحقل','القيمة']],body:[
+        ['المريض',lab.patient],
+        ['الطبيب',lab.doctor||'-'],
+        ['الخدمة',lab.service],
+        ['الحالة',lab.status],
+        ['التكلفة',formatCurrency(lab.cost||0)],
+        ['الملاحظات',lab.notes||'-'],
+        ['النتيجة',lab.result||'-']
+      ]});
+      if(lab.resultAttachment) doc.text('مرفق نتيجة مضمّن',14,doc.lastAutoTable.finalY+12);
+      doc.save(`${reference}.pdf`);
+    }
+
+    async function labSummaryPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      const labs=await Storage.load('labs');
+      doc.text('كشف المعامل',14,20);
+      doc.autoTable({startY:30,head:[['المرجع','المريض','الخدمة','الحالة','التكلفة','نتيجة']],body:labs.map(l=>[l.reference,l.patient,l.service,l.status,formatCurrency(l.cost||0),l.result?l.result.slice(0,30)+'...':'-'])});
+      doc.save('labs-summary.pdf');
+    }
+
+    async function patientsAgingPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('أعمار الذمم للمرضى',14,20);
+      const receivables=await Storage.load('patientReceivables');
+      const now=new Date();
+      const summary={};
+      receivables.filter(r=>r.balance>0).forEach(r=>{
+        const diff=Math.floor((now-new Date(r.due))/(1000*60*60*24));
+        const bucket=diff<=30?'0-30':diff<=60?'31-60':diff<=90?'61-90':'90+';
+        if(!summary[r.patient]) summary[r.patient]={name:r.patient,'0-30':0,'31-60':0,'61-90':0,'90+':0,total:0};
+        summary[r.patient][bucket]+=r.balance;
+        summary[r.patient].total+=r.balance;
+      });
+      const body=Object.values(summary).map(row=>[
+        row.name,
+        formatCurrency(row['0-30']),
+        formatCurrency(row['31-60']),
+        formatCurrency(row['61-90']),
+        formatCurrency(row['90+']),
+        formatCurrency(row.total)
+      ]);
+      doc.autoTable({startY:30,head:[['المريض','0-30','31-60','61-90','90+','إجمالي']],body:body});
+      doc.save('patients-aging.pdf');
+    }
+
+    async function supplierAgingPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('كشف الموردين',14,20);
+      const returns=await Storage.load('supplierReturns');
+      doc.autoTable({startY:30,head:[['المرجع','المورد','القيمة','الحالة']],body:returns.map(r=>[r.reference,r.supplier,formatCurrency(r.amount),r.status])});
+      doc.save('supplier-aging.pdf');
+    }
+
+    async function inventoryPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('تقرير المخزون',14,20);
+      const inventory=await Storage.load('inventory');
+      doc.autoTable({startY:30,head:[['المادة','الكمية','الحد الأدنى','الصلاحية']],body:inventory.map(i=>[i.name,i.qty,i.min,i.expiry?formatDate(i.expiry):'-'])});
+      doc.save('inventory.pdf');
+    }
+
+    async function doctorProfitPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('ربحية الأطباء',14,20);
+      const doctors=await Storage.load('doctors');
+      const receipts=await Storage.load('receipts');
+      const labs=await Storage.load('labs');
+      const overheads=await calculateOverheads();
+      const rows=doctors.map(doc=>{
+        const revenue=receipts.filter(r=>r.doctor===doc.name&&r.status==='active').reduce((s,r)=>s+r.amount,0);
+        const labCost=labs.filter(l=>l.doctor===doc.name).reduce((s,l)=>s+(l.cost||0),0);
+        const net=revenue-labCost;
+        const doctorShare=net*(doc.share/100);
+        const contribution=net-doctorShare-(overheads[doc.name]||0);
+        return [doc.name,formatCurrency(revenue),formatCurrency(labCost),doc.share+'%',formatCurrency(doctorShare),formatCurrency(contribution)];
+      });
+      doc.autoTable({startY:30,head:[['الطبيب','الإيراد','تكلفة المعمل','النسبة','نصيب الطبيب','مساهمة العيادة']],body:rows});
+      doc.save('doctor-profit.pdf');
+    }
+
+    async function clinicProfitPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('ربحية العيادة',14,20);
+      const receipts=await Storage.load('receipts');
+      const payments=await Storage.load('payments');
+      const labs=await Storage.load('labs');
+      const doctors=await Storage.load('doctors');
+      const revenue=receipts.filter(r=>r.status==='active').reduce((s,r)=>s+r.amount,0);
+      const labCost=labs.reduce((s,l)=>s+(l.cost||0),0);
+      const expenses=payments.filter(p=>p.state!=='cancelled').reduce((s,p)=>s+p.amount,0);
+      const doctorShare=doctors.reduce((s,doc)=>{
+        const docRevenue=receipts.filter(r=>r.doctor===doc.name&&r.status==='active').reduce((t,r)=>t+r.amount,0);
+        const docLab=labs.filter(l=>l.doctor===doc.name).reduce((t,l)=>t+(l.cost||0),0);
+        return s+(docRevenue-docLab)*(doc.share/100);
+      },0);
+      const net=revenue-labCost-expenses-doctorShare;
+      doc.autoTable({startY:30,head:[['البند','القيمة']],body:[['الإيرادات',formatCurrency(revenue)],['تكلفة المعمل',formatCurrency(labCost)],['مصروفات أخرى',formatCurrency(expenses)],['نصيب الأطباء',formatCurrency(doctorShare)],['صافي الربح',formatCurrency(net)]]});
+      doc.save('clinic-profit.pdf');
+    }
+
+    async function dailyReportPDF(){await genericReport('daily');}
+    async function weeklyReportPDF(){await genericReport('weekly');}
+    async function monthlyReportPDF(){await genericReport('monthly');}
+
+    async function genericReport(type){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text(`تقرير ${type==='daily'?'يومي':type==='weekly'?'أسبوعي':'شهري'}`,14,20);
+      const receipts=await Storage.load('receipts');
+      const payments=await Storage.load('payments');
+      const now=new Date();
+      let start;
+      if(type==='daily') start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      if(type==='weekly'){start=new Date(now);start.setDate(now.getDate()-6);}
+      if(type==='monthly'){start=new Date(now.getFullYear(),now.getMonth(),1);}
+      const filteredReceipts=receipts.filter(r=>new Date(r.createdAt)>=start&&new Date(r.createdAt)<=now && r.status==='active');
+      const filteredPayments=payments.filter(r=>new Date(r.createdAt)>=start&&new Date(r.createdAt)<=now && r.state!=='cancelled');
+      const totalIn=filteredReceipts.reduce((s,r)=>s+r.amount,0);
+      const totalOut=filteredPayments.reduce((s,r)=>s+r.amount,0);
+      doc.autoTable({startY:30,head:[['البند','القيمة']],body:[['المدخول',formatCurrency(totalIn)],['المخروج',formatCurrency(totalOut)],['الصافي',formatCurrency(totalIn-totalOut)]]});
+      doc.save(`report-${type}.pdf`);
+    }
+
+    async function journalPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF('p','pt','a4');
+      doc.text('دفتر اليومية',40,40);
+      const journals=await Storage.load('journals');
+      const body=journals.slice(-200).reverse().map(j=>[j.id,formatDate(j.createdAt),j.meta?.type||'',j.entries.map(e=>`${e.account}: ${e.debit?formatCurrency(e.debit):''} ${e.credit?formatCurrency(e.credit):''}`).join('\n')]);
+      doc.autoTable({startY:60,head:[['المرجع','التاريخ','الوصف','القيود']],body});
+      doc.save('journal.pdf');
+    }
+
+    async function auditLogPDF(){
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF('p','pt','a4');
+      doc.text('سجل التدقيق',40,40);
+      const log=await Storage.load('audit');
+      doc.autoTable({startY:60,head:[['الوقت','المستخدم','الإجراء','المرجع']],body:log.slice(-200).reverse().map(i=>[formatDate(i.timestamp),i.user,i.action,i.reference])});
+      doc.save('audit-log.pdf');
+    }
+
+    async function downloadReceiptPDF(){
+      const receipts=await Storage.load('receipts');
+      if(!receipts.length){showToast('لا توجد سندات','error');return;}
+      await receiptPDF(receipts[receipts.length-1].reference);
+    }
+    async function downloadPaymentPDF(){
+      const payments=await Storage.load('payments');
+      if(!payments.length){showToast('لا توجد سندات','error');return;}
+      await paymentPDF(payments[payments.length-1].reference);
+    }
+
+    async function runHealthCheck(){
+      const results=[];
+      try{
+        if(!window.localforage) throw new Error('localForage غير متاح');
+        results.push({item:'localForage',status:'ok'});
+      }catch(err){results.push({item:'localForage',status:'fail',message:err.message});}
+      try{
+        if(!window.jspdf) throw new Error('jsPDF غير متاح');
+        results.push({item:'jsPDF',status:'ok'});
+      }catch(err){results.push({item:'jsPDF',status:'fail',message:err.message});}
+      try{
+        await localforage.setItem('test-key',{time:Date.now()});
+        await localforage.getItem('test-key');
+        results.push({item:'الكتابة/القراءة',status:'ok'});
+      }catch(err){results.push({item:'الكتابة/القراءة',status:'fail',message:err.message});}
+      try{
+        const journals=await Storage.load('journals');
+        const subset=journals.slice(-20);
+        const valid=subset.every(j=>Math.abs(j.entries.reduce((s,e)=>s+(e.debit||0),0)-j.entries.reduce((s,e)=>s+(e.credit||0),0))<0.01);
+        results.push({item:'اتزان القيود',status:valid?'ok':'fail',message:valid?'':'يوجد قيد غير متزن'});
+      }catch(err){results.push({item:'اتزان القيود',status:'fail',message:err.message});}
+      const health=document.getElementById('healthReport');
+      const ok=results.every(r=>r.status==='ok');
+      health.innerHTML='<ul>'+results.map(r=>`<li>${r.status==='ok'?'✅':'❌'} ${r.item}${r.message?` — ${r.message}`:''}</li>`).join('')+'</ul>';
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF();
+      doc.text('Health Check',14,20);
+      doc.autoTable({startY:30,head:[['البند','النتيجة','ملاحظات']],body:results.map(r=>[r.item,r.status==='ok'?'✅':'❌',r.message||''])});
+      doc.save('health-check.pdf');
+      showToast(ok?'جميع الاختبارات ناجحة':'بعض الاختبارات فشلت',ok?'success':'error');
+    }
+
+    document.getElementById('btnSensitive').onclick=()=>{
+      if(App.role!=='manager'){showToast('المدير فقط يمكنه تفعيل الوضع الحساس','error');return;}
+      if(App.sensitive){App.sensitive=false;updateStatus();return;}
+      promptPassword('danger',()=>{App.sensitive=true;updateStatus();});
+    };
+
+    document.getElementById('btnSwitchRole').onclick=()=>{
+      const overlay=document.getElementById('modalOverlay');
+      overlay.innerHTML=`<div class="modal">
+        <header><h3>تبديل المستخدم</h3></header>
+        <p>اختر الدور:</p>
+        <select id="roleSelect" style="width:100%;margin-bottom:1rem;">
+          <option value="manager">مدير</option>
+          <option value="secretary">سكرتيرة</option>
+        </select>
+        <div class="flex" style="justify-content:flex-end;">
+          <button class="btn" id="confirmRole">تأكيد</button>
+        </div>
+      </div>`;
+      overlay.classList.add('active');
+      document.getElementById('confirmRole').onclick=()=>{
+        const role=document.getElementById('roleSelect').value;
+        if(role==='manager'){
+          promptPassword('settings',()=>{
+            overlay.classList.remove('active');
+            App.role='manager';
+            updateStatus();
+            renderNav();
+            switchView('dashboard');
+          });
+        }else{
+          overlay.classList.remove('active');
+          App.role='secretary';
+          App.sensitive=false;
+          updateStatus();
+          renderNav();
+          switchView('dashboard');
+        }
+      };
+      overlay.addEventListener('click',e=>{if(e.target.id==='modalOverlay')overlay.classList.remove('active');},{once:true});
+    };
+
+    function appointmentsSeed(){
+      return [
+        {id:1,patient:'أحمد',service:'تنظيف',doctor:'د. ليلى',paid:200,due:0,status:'scheduled',period:'morning',notes:'',date:new Date().toISOString()},
+        {id:2,patient:'سارة',service:'حشو',doctor:'د. محمد',paid:0,due:300,status:'scheduled',period:'evening',notes:'',date:new Date(Date.now()+24*60*60*1000).toISOString()}
+      ];
+    }
+
+    async function bootstrap(){
+      await Storage.init();
+      const existingPatients=await Storage.load('patients');
+      if(!existingPatients.length){
+        await Storage.save('patients',[{name:'أحمد علي',phone:'0500000000',balance:0,deposit:0,notes:'',createdAt:new Date().toISOString()}]);
+      }
+      const existingDoctors=await Storage.load('doctors');
+      if(!existingDoctors.length){
+        await Storage.save('doctors',[{name:'د. ليلى',share:40},{name:'د. محمد',share:45}]);
+      }
+      const appointments=await Storage.load('appointments');
+      if(!appointments.length){
+        await Storage.save('appointments',appointmentsSeed());
+      }
+      updateStatus();
+      renderNav();
+      switchView('dashboard');
+      renderReceiptsTable();
+      renderPaymentsTable();
+      renderJournalTable();
+      renderPatientsTable();
+      renderPatientReceivables();
+      renderMedicalAlerts();
+      renderSupplierReturns();
+      renderLabsTable();
+      renderInventoryTable();
+      renderOperatingExpenses();
+      renderFixedAssets();
+      renderPeriodClosings();
+      renderDoctorsTable();
+      renderAppointmentsTable();
+      renderPrescriptionsTable();
+      renderBankReconciliations();
+      renderDashboardWidgets();
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
