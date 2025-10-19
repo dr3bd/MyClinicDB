@@ -73,6 +73,25 @@
       box-shadow:0 12px 32px rgba(0,0,0,.06);
       margin-bottom:1.5rem;
     }
+    .master-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;}
+    .master-tabs button{
+      border-radius:10px;
+      border:1px solid #dbe5ef;
+      background:#f3f6fb;
+      padding:.45rem .9rem;
+      font-weight:600;
+      cursor:pointer;
+      color:var(--text);
+    }
+    .master-tabs button.active{
+      background:rgba(20,92,158,0.15);
+      color:var(--primary);
+      border-color:var(--primary);
+    }
+    .master-section{display:none;animation:fadeIn .2s ease-in-out;}
+    .master-section.active{display:block;}
+    .form-actions{display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem;flex-wrap:wrap;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
     .grid{display:grid;gap:1rem;}
     .grid-2{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
     .grid .full{grid-column:1/-1;}
@@ -855,7 +874,7 @@
         suppliers:()=>{renderSupplierReturns();renderSupplierPayables();renderPaymentOutstanding();setupPurchaseForm();renderCashAccountSelectors();},
         labs:()=>renderLabsTable(),
         inventory:()=>{renderInventoryTable();renderInventoryConsumptionHistory();},
-        master:()=>{renderEmployees();renderLabPartners();renderClinicCatalog();renderLabCatalog();refreshCatalogLists();refreshDoctorOptions();},
+        master:()=>{setupMasterTabs();renderEmployees();renderLabPartners();renderClinicCatalog();renderLabCatalog();refreshCatalogLists();refreshDoctorOptions();},
         finance:()=>{renderOperatingExpenses();renderFixedAssets();renderPeriodClosings();renderAssetDisposals();renderDepreciationSchedule();renderCashAccountSelectors();},
         opening:()=>{renderOpeningBalanceForm();},
         doctors:()=>renderDoctorsTable(),
@@ -1319,78 +1338,136 @@
 
     function Views_master(){
       return `
-      <div class="card">
-        <h2>الموظفون</h2>
-        <div class="grid grid-2">
-          <div><label>الاسم</label><input id="employeeName" /></div>
-          <div><label>المسمى الوظيفي</label><input id="employeeRole" /></div>
-          <div><label>الهاتف</label><input id="employeePhone" /></div>
-          <div><label>الراتب الشهري</label><input id="employeeSalary" type="number" min="0" step="0.5" /></div>
-          <div><label>تاريخ بدء العمل</label><input id="employeeStart" type="date" /></div>
-          <div><label>ملاحظات</label><textarea id="employeeNotes"></textarea></div>
+      <div class="card" id="masterRoot">
+        <div class="master-tabs">
+          <button type="button" class="master-tab active" data-section="employees">الموظفون</button>
+          <button type="button" class="master-tab" data-section="labs">المعامل المتعاونة</button>
+          <button type="button" class="master-tab" data-section="clinic-services">خدمات العيادة</button>
+          <button type="button" class="master-tab" data-section="lab-services">خدمات المعمل</button>
         </div>
-        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
-          <button class="btn" onclick="saveEmployee()">حفظ الموظف</button>
-        </div>
-        <table style="margin-top:1.5rem;">
-          <thead><tr><th>الاسم</th><th>الوظيفة</th><th>الهاتف</th><th>الراتب</th><th>بداية العمل</th><th>خيارات</th></tr></thead>
-          <tbody id="employeesTable"></tbody>
-        </table>
-      </div>
-      <div class="card">
-        <h2>المعامل المتعاونة</h2>
-        <div class="grid grid-2">
-          <div><label>اسم المعمل</label><input id="labMasterName" /></div>
-          <div><label>الهاتف</label><input id="labMasterPhone" /></div>
-          <div class="full"><label>ملاحظات</label><textarea id="labMasterNotes"></textarea></div>
-        </div>
-        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
-          <button class="btn" onclick="saveLabPartner()">حفظ المعمل</button>
-        </div>
-        <table style="margin-top:1.5rem;">
-          <thead><tr><th>الاسم</th><th>الهاتف</th><th>ملاحظات</th><th>خيارات</th></tr></thead>
-          <tbody id="labPartnersTable"></tbody>
-        </table>
-      </div>
-      <div class="card">
-        <h2>كتالوج خدمات العيادة</h2>
-        <div class="grid grid-2">
-          <div><label>القسم</label><input id="clinicServiceDepartment" /></div>
-          <div><label>الخدمة</label><input id="clinicServiceName" /></div>
-          <div><label>السعر</label><input id="clinicServicePrice" type="number" min="0" step="0.5" /></div>
-          <div class="full"><label>ملاحظات</label><textarea id="clinicServiceNotes"></textarea></div>
-        </div>
-        <div class="flex" style="margin-top:1rem;justify-content:flex-end;gap:.75rem;flex-wrap:wrap;">
-          <button class="btn" onclick="saveClinicService()">حفظ الخدمة</button>
-          <button class="btn secondary" onclick="exportClinicCatalog()">تصدير CSV</button>
-          <label class="btn secondary" style="cursor:pointer;">
-            استيراد CSV
-            <input type="file" id="clinicCatalogImport" accept=".csv" style="display:none;" onchange="importClinicCatalog(event)" />
-          </label>
-        </div>
-        <table style="margin-top:1.5rem;">
-          <thead><tr><th>القسم</th><th>الخدمة</th><th>السعر</th><th>ملاحظات</th><th>خيارات</th></tr></thead>
-          <tbody id="clinicCatalogTable"></tbody>
-        </table>
-      </div>
-      <div class="card">
-        <h2>كتالوج خدمات المعمل</h2>
-        <div class="grid grid-2">
-          <div><label>الخدمة</label><input id="labCatalogService" /></div>
-          <div><label>المعمل</label><input id="labCatalogLab" list="labPartnerList" /></div>
-          <div><label>السعر</label><input id="labCatalogPrice" type="number" min="0" step="0.5" /></div>
-          <div class="full"><label>ملاحظات</label><textarea id="labCatalogNotes"></textarea></div>
-        </div>
-        <div class="flex" style="margin-top:1rem;justify-content:flex-end;">
-          <button class="btn" onclick="saveLabCatalogService()">حفظ خدمة المعمل</button>
-        </div>
-        <table style="margin-top:1.5rem;">
-          <thead><tr><th>الخدمة</th><th>المعمل</th><th>السعر</th><th>ملاحظات</th><th>خيارات</th></tr></thead>
-          <tbody id="labCatalogTable"></tbody>
-        </table>
+        <section class="master-section active" data-section="employees">
+          <form id="employeeForm">
+            <div class="grid grid-2">
+              <div><label>الاسم</label><input id="employeeName" required /></div>
+              <div><label>المسمى الوظيفي</label><input id="employeeRole" /></div>
+              <div><label>الهاتف</label><input id="employeePhone" /></div>
+              <div><label>الراتب الشهري</label><input id="employeeSalary" type="number" min="0" step="0.5" /></div>
+              <div><label>تاريخ بدء العمل</label><input id="employeeStart" type="date" /></div>
+              <div><label>ملاحظات</label><textarea id="employeeNotes"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn">حفظ الموظف</button>
+            </div>
+          </form>
+          <table style="margin-top:1.5rem;">
+            <thead><tr><th>الاسم</th><th>الوظيفة</th><th>الهاتف</th><th>الراتب</th><th>بداية العمل</th><th>خيارات</th></tr></thead>
+            <tbody id="employeesTable"></tbody>
+          </table>
+        </section>
+        <section class="master-section" data-section="labs">
+          <form id="labPartnerForm">
+            <div class="grid grid-2">
+              <div><label>اسم المعمل</label><input id="labMasterName" required /></div>
+              <div><label>الهاتف</label><input id="labMasterPhone" /></div>
+              <div class="full"><label>ملاحظات</label><textarea id="labMasterNotes"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn">حفظ المعمل</button>
+            </div>
+          </form>
+          <table style="margin-top:1.5rem;">
+            <thead><tr><th>الاسم</th><th>الهاتف</th><th>ملاحظات</th><th>خيارات</th></tr></thead>
+            <tbody id="labPartnersTable"></tbody>
+          </table>
+        </section>
+        <section class="master-section" data-section="clinic-services">
+          <form id="clinicServiceForm">
+            <div class="grid grid-2">
+              <div><label>القسم</label><input id="clinicServiceDepartment" /></div>
+              <div><label>الخدمة</label><input id="clinicServiceName" required /></div>
+              <div><label>السعر</label><input id="clinicServicePrice" type="number" min="0" step="0.5" /></div>
+              <div class="full"><label>ملاحظات</label><textarea id="clinicServiceNotes"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn">حفظ الخدمة</button>
+              <button type="button" class="btn secondary" id="clinicCatalogExport">تصدير CSV</button>
+              <label class="btn secondary" style="cursor:pointer;">
+                استيراد CSV
+                <input type="file" id="clinicCatalogImport" accept=".csv" style="display:none;" />
+              </label>
+            </div>
+          </form>
+          <table style="margin-top:1.5rem;">
+            <thead><tr><th>القسم</th><th>الخدمة</th><th>السعر</th><th>ملاحظات</th><th>خيارات</th></tr></thead>
+            <tbody id="clinicCatalogTable"></tbody>
+          </table>
+        </section>
+        <section class="master-section" data-section="lab-services">
+          <form id="labCatalogForm">
+            <div class="grid grid-2">
+              <div><label>الخدمة</label><input id="labCatalogService" required /></div>
+              <div><label>المعمل</label><input id="labCatalogLab" list="labPartnerList" /></div>
+              <div><label>السعر</label><input id="labCatalogPrice" type="number" min="0" step="0.5" /></div>
+              <div class="full"><label>ملاحظات</label><textarea id="labCatalogNotes"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn">حفظ خدمة المعمل</button>
+            </div>
+          </form>
+          <table style="margin-top:1.5rem;">
+            <thead><tr><th>الخدمة</th><th>المعمل</th><th>السعر</th><th>ملاحظات</th><th>خيارات</th></tr></thead>
+            <tbody id="labCatalogTable"></tbody>
+          </table>
+        </section>
       </div>`;
     }
     Views.master=Views_master;
+
+    function setupMasterTabs(){
+      const root=document.getElementById('masterRoot');
+      if(!root) return;
+      const tabs=root.querySelectorAll('.master-tab');
+      const sections=root.querySelectorAll('.master-section');
+      tabs.forEach(tab=>{
+        if(tab.dataset.bound) return;
+        tab.addEventListener('click',()=>{
+          const target=tab.dataset.section;
+          tabs.forEach(btn=>btn.classList.toggle('active',btn===tab));
+          sections.forEach(section=>section.classList.toggle('active',section.dataset.section===target));
+        });
+        tab.dataset.bound='true';
+      });
+      const forms=[
+        {id:'employeeForm',handler:saveEmployee},
+        {id:'labPartnerForm',handler:saveLabPartner},
+        {id:'clinicServiceForm',handler:saveClinicService},
+        {id:'labCatalogForm',handler:saveLabCatalogService}
+      ];
+      forms.forEach(({id,handler})=>{
+        const form=root.querySelector(`#${id}`);
+        if(form && !form.dataset.bound){
+          form.addEventListener('submit',evt=>{
+            evt.preventDefault();
+            handler();
+          });
+          form.dataset.bound='true';
+        }
+      });
+      const importInput=root.querySelector('#clinicCatalogImport');
+      if(importInput && !importInput.dataset.bound){
+        importInput.addEventListener('change',event=>importClinicCatalog(event));
+        importInput.dataset.bound='true';
+      }
+      const exportBtn=root.querySelector('#clinicCatalogExport');
+      if(exportBtn && !exportBtn.dataset.bound){
+        exportBtn.addEventListener('click',()=>exportClinicCatalog());
+        exportBtn.dataset.bound='true';
+      }
+      if(tabs.length){
+        const activeTab=[...tabs].find(btn=>btn.classList.contains('active'))||tabs[0];
+        activeTab.click();
+      }
+    }
 
     function Views_finance(){
       return `
@@ -3901,7 +3978,8 @@
     }
 
     async function importClinicCatalog(event){
-      const file=event.target.files?.[0];
+      const input=event?.target;
+      const file=input?.files?.[0];
       if(!file) return;
       try{
         const text=await file.text();
@@ -3934,7 +4012,7 @@
         console.error(err);
         showToast('تعذر قراءة الملف','error');
       }finally{
-        event.target.value='';
+        if(input) input.value='';
       }
     }
 
