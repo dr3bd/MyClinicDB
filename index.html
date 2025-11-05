@@ -45,8 +45,13 @@
       flex-direction:column;
       gap:1rem;
     }
-    .nav-group{display:flex;flex-direction:column;gap:.35rem;}
-    .nav-group-title{font-size:.85rem;font-weight:700;color:#5c6c80;padding:.1rem .4rem;}
+    .nav-group{display:flex;flex-direction:column;border-radius:12px;background:#f5f7fb;padding:.35rem .4rem;}
+    .nav-group+.nav-group{margin-top:.25rem;}
+    .nav-group.collapsed .nav-items{display:none;}
+    .nav-group-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:.85rem;font-weight:700;color:#2f3c4f;padding:.2rem .35rem;border-radius:8px;}
+    .nav-group-header:hover{background:rgba(20,92,158,0.08);color:var(--primary);}
+    .nav-group-icon{font-size:.85rem;color:#5c6c80;}
+    .nav-items{display:flex;flex-direction:column;gap:.3rem;padding:.4rem .15rem .2rem;}
     nav button{
       border-radius:12px;
       border:1px solid transparent;
@@ -203,7 +208,8 @@
       },
       counters:{},
       cashAccounts:[],
-      view:'dashboard'
+      view:'dashboard',
+      navCollapsed:{}
     };
 
     const ChartOfAccounts={
@@ -827,37 +833,64 @@
       {title:'إعدادات النظام',items:['settings']}
     ];
 
+    const ROLE_ACCESS={
+      manager:new Set(Object.keys(NAV_LABELS)),
+      secretary:new Set(['dashboard','patients','vouchers','journal','appointments','prescriptions','labs','suppliers'])
+    };
+
+    function isViewAllowed(id){
+      const allowed=ROLE_ACCESS[App.role]||ROLE_ACCESS.manager;
+      return allowed.has(id);
+    }
+
+    function firstAllowedView(){
+      const allowed=ROLE_ACCESS[App.role]||ROLE_ACCESS.manager;
+      for(const group of NAV_GROUPS){
+        for(const item of group.items){
+          if(allowed.has(item)) return item;
+        }
+      }
+      const fallback=allowed.values().next();
+      return fallback?fallback.value:'dashboard';
+    }
+
     function renderNav(){
       const nav=document.getElementById('mainNav');
       nav.innerHTML='';
       NAV_GROUPS.forEach(group=>{
-        const visible=group.items.filter(id=>{
-          if(App.role!=='manager' && id==='settings') return false;
-          return !!NAV_LABELS[id];
-        });
+        const visible=group.items.filter(id=>isViewAllowed(id)&&!!NAV_LABELS[id]);
         if(!visible.length) return;
         const wrapper=document.createElement('div');
-        wrapper.className='nav-group';
-        const title=document.createElement('div');
-        title.className='nav-group-title';
-        title.textContent=group.title;
-        wrapper.appendChild(title);
+        const collapsed=!!App.navCollapsed[group.title];
+        wrapper.className=`nav-group${collapsed?' collapsed':''}`;
+        const header=document.createElement('div');
+        header.className='nav-group-header';
+        header.innerHTML=`<span>${group.title}</span><span class="nav-group-icon">${collapsed?'▸':'▾'}</span>`;
+        header.onclick=()=>{
+          App.navCollapsed[group.title]=!collapsed;
+          renderNav();
+        };
+        wrapper.appendChild(header);
+        const itemsContainer=document.createElement('div');
+        itemsContainer.className='nav-items';
         visible.forEach(id=>{
           const btn=document.createElement('button');
           btn.textContent=NAV_LABELS[id];
           if(App.view===id) btn.classList.add('active');
           btn.onclick=()=>switchView(id);
-          wrapper.appendChild(btn);
+          itemsContainer.appendChild(btn);
         });
+        wrapper.appendChild(itemsContainer);
         nav.appendChild(wrapper);
       });
     }
 
     function switchView(id){
-      App.view=id;
+      const target=isViewAllowed(id)?id:firstAllowedView();
+      App.view=target;
       renderNav();
       const container=document.getElementById('view');
-      container.innerHTML=Views[id]?Views[id]():'';
+      container.innerHTML=Views[target]?Views[target]():'';
       renderCashAccountSelectors();
       const hooks={
         dashboard:()=>renderDashboardWidgets(),
@@ -889,7 +922,7 @@
         reports:()=>{},
         settings:()=>{}
       };
-      if(hooks[id]) hooks[id]();
+      if(hooks[target]) hooks[target]();
     }
 
     async function promptPassword(type,cb){
@@ -5298,7 +5331,7 @@
             App.role='manager';
             updateStatus();
             renderNav();
-            switchView('dashboard');
+            switchView(firstAllowedView());
           });
         }else{
           overlay.classList.remove('active');
@@ -5306,16 +5339,257 @@
           App.sensitive=false;
           updateStatus();
           renderNav();
-          switchView('dashboard');
+          switchView(firstAllowedView());
         }
       };
       overlay.addEventListener('click',e=>{if(e.target.id==='modalOverlay')overlay.classList.remove('active');},{once:true});
     };
 
+    async function createDemoReceipt({operation='service',patient,service='',doctor='',amount,accountId='',notes='',createdAt}){
+      const numeric=roundAmount(amount||0);
+      if(!patient||numeric<=0) return;
+      const cashAccount=accountId||defaultCashAccountId();
+      const now=createdAt||new Date().toISOString();
+      const reference=generateReference('RC');
+      const receipts=await Storage.load('receipts');
+      const record={
+        reference,
+        patient,
+        service,
+        doctor,
+        amount:numeric,
+        notes,
+        attachment:null,
+        status:'posted',
+        receiptType:operation,
+        accountId:cashAccount||'',
+        createdAt:now
+      };
+      let entryType='receipt-service';
+      switch(operation){
+        case 'settlement': entryType='receipt-settlement'; break;
+        case 'deposit': entryType='receipt-deposit'; break;
+        case 'deposit-apply': entryType='receipt-deposit-apply'; break;
+        default: entryType='receipt-service';
+      }
+      const payload={amount:numeric,service,patient,accountId:cashAccount||'',doctor};
+      let commissionData={commission:0,labCost:0,indices:[],labs:[],share:0};
+      if(operation==='service'){
+        commissionData=await calculateDoctorCommission(patient,service,doctor,numeric);
+        record.doctorCommission=commissionData.commission;
+        record.labCost=commissionData.labCost;
+        record.doctorShare=commissionData.share;
+        payload.doctorCommission=commissionData.commission;
+      }
+      try{
+        await recordJournal(buildEntry(entryType,payload),{type:'receipt-demo',reference,patient,doctor,receiptType:operation});
+      }catch(err){
+        console.error('demo-receipt-journal',err);
+        return;
+      }
+      if(operation==='service'){
+        try{await applyServiceCogsForRevenue(service,doctor,reference,'receipt');}catch(err){console.warn('demo-cogs',err);}
+        if(commissionData.indices.length){
+          const labsList=await Storage.load('labs');
+          const stamp=new Date().toISOString();
+          commissionData.indices.forEach(i=>{
+            if(labsList[i]){
+              labsList[i].settledReference=reference;
+              labsList[i].settledAt=stamp;
+            }
+          });
+          await Storage.save('labs',labsList);
+        }
+      }
+      if(operation==='deposit'){
+        await adjustPatientDeposit(patient,numeric,reference,'deposit');
+        record.depositMovement={type:'add',amount:numeric};
+      }
+      if(operation==='deposit-apply'){
+        await adjustPatientDeposit(patient,-numeric,reference,'apply');
+        record.depositMovement={type:'use',amount:numeric};
+      }
+      if(operation==='settlement'||operation==='deposit-apply'){
+        const allocations=await applyReceiptToReceivables(patient,numeric);
+        record.allocations=allocations;
+      }
+      receipts.push(record);
+      await Storage.save('receipts',receipts);
+      await logAudit('seed',reference,'سند قبض تجريبي',{operation,amount:numeric});
+    }
+
+    async function createDemoPayment({paymentType='invoice',supplier,amount,accountId='',notes='',createdAt}){
+      const numeric=roundAmount(amount||0);
+      if(!supplier||numeric<=0) return;
+      const cashAccount=accountId||defaultCashAccountId();
+      const reference=generateReference('PMT');
+      const now=createdAt||new Date().toISOString();
+      const payments=await Storage.load('payments');
+      const record={
+        reference,
+        supplier,
+        paymentType,
+        paymentStatus:paymentType,
+        status:'posted',
+        amount:numeric,
+        notes,
+        attachment:null,
+        accountId:cashAccount||'',
+        createdAt:now
+      };
+      let entryType='payment-settle';
+      if(paymentType==='advance') entryType='payment-advance';
+      if(paymentType==='invoice') entryType='payment-invoice';
+      try{
+        await recordJournal(buildEntry(entryType,{amount:numeric,supplier,accountId:cashAccount||'',invoice:reference}),{type:'payment-demo',reference,supplier,paymentType});
+      }catch(err){
+        console.error('demo-payment-journal',err);
+        return;
+      }
+      if(paymentType==='invoice'){
+        const allocations=await applyPaymentToPayables(supplier,numeric);
+        record.allocations=allocations;
+      }
+      payments.push(record);
+      await Storage.save('payments',payments);
+      await logAudit('seed',reference,'سند صرف تجريبي',{paymentType,amount:numeric});
+    }
+
+    async function seedDemoData(){
+      const cashAccount=defaultCashAccountId();
+      const patients=await Storage.load('patients');
+      if(!patients.length) return;
+      const [patientA,patientB,patientC]=patients;
+
+      const clinicServices=await Storage.load('clinicServices');
+      if(!clinicServices.length){
+        const base=Date.now();
+        await Storage.save('clinicServices',[
+          {id:base,department:'العلاجات التحفظية',name:'حشو تجميلي ضرس',price:45000,notes:'يشمل تلميع نهائي'},
+          {id:base+1,department:'الجراحة الفموية',name:'خلع جراحي لضرس عقل',price:60000,notes:''},
+          {id:base+2,department:'التقويم',name:'متابعة تقويم شهرية',price:120000,notes:'متابعة خطة التقويم'}
+        ]);
+      }
+
+      const labPartners=await Storage.load('labPartners');
+      if(!labPartners.length){
+        const base=Date.now();
+        await Storage.save('labPartners',[
+          {id:base,name:'مختبر الابتسامة',phone:'0741111111',notes:'تركيبات خزفية'},
+          {id:base+1,name:'مختبر المستقبل',phone:'0742222222',notes:'خدمات تقويم متقدمة'}
+        ]);
+      }
+
+      const labCatalog=await Storage.load('labCatalog');
+      if(!labCatalog.length){
+        const base=Date.now();
+        await Storage.save('labCatalog',[
+          {id:base,service:'تاج زركون كامل',lab:'مختبر الابتسامة',price:280000,notes:''},
+          {id:base+1,service:'قالب تقويم شفاف',lab:'مختبر المستقبل',price:180000,notes:'يشمل التعديلات الأولى'}
+        ]);
+      }
+
+      const employees=await Storage.load('employees');
+      if(!employees.length){
+        const base=Date.now();
+        await Storage.save('employees',[
+          {id:base,name:'منى سالم العريقي',role:'محاسبة',phone:'0751111111',salary:280000,start:'2022-01-01',notes:'دوام كامل'},
+          {id:base+1,name:'فؤاد أحمد الشيباني',role:'مساعد طبيب',phone:'0752222222',salary:180000,start:'2023-03-15',notes:'فترة صباحية'}
+        ]);
+      }
+
+      const alerts=await Storage.load('medicalAlerts');
+      if(!alerts.length && patientB){
+        await Storage.save('medicalAlerts',[
+          {id:Date.now(),patient:patientB.name,type:'حساسية للبنسلين',severity:'عالية',notes:'تم التأكيد من التاريخ الطبي',createdAt:new Date().toISOString()}
+        ]);
+      }
+
+      const receivables=await Storage.load('patientReceivables');
+      let settlementReceivable=null;
+      if(!receivables.length){
+        if(patientA){
+          await createPatientReceivable({patient:patientA.name,service:'تنظيف لثة شامل',doctor:'د. ليلى',amount:35000,due:new Date(Date.now()+7*24*60*60*1000).toISOString().slice(0,10),notes:'خطة علاج مرحلية',source:'demo'});
+        }
+        if(patientC){
+          settlementReceivable=await createPatientReceivable({patient:patientC.name,service:'دفعة تقويمية أولى',doctor:'د. محمد',amount:120000,due:new Date(Date.now()+30*24*60*60*1000).toISOString().slice(0,10),notes:'حالة تقويم نشطة',source:'demo'});
+        }
+      }else{
+        settlementReceivable=receivables.find(r=>r.patient===patientC?.name)||null;
+      }
+
+      const receipts=await Storage.load('receipts');
+      if(!receipts.length){
+        if(patientA){
+          await createDemoReceipt({operation:'service',patient:patientA.name,service:'استشارة طارئة',doctor:'د. ليلى',amount:20000,accountId:cashAccount,notes:'سداد نقدي فوري'});
+        }
+        if(patientC&&settlementReceivable){
+          const partial=Math.min(40000,settlementReceivable.amount||settlementReceivable.balance||40000);
+          await createDemoReceipt({operation:'settlement',patient:patientC.name,service:settlementReceivable.service,doctor:settlementReceivable.doctor,amount:partial,accountId:cashAccount,notes:'تسوية جزئية للذمة'});
+        }
+        if(patientB){
+          await createDemoReceipt({operation:'deposit',patient:patientB.name,amount:30000,accountId:cashAccount,notes:'أمانة لعلاج تجميلي'});
+        }
+      }
+
+      let supplierName='مؤسسة الرعاية السنية';
+      const invoices=await Storage.load('purchaseInvoices');
+      if(!invoices.length){
+        const reference=generateReference('PI');
+        const items=[
+          {name:'كبسولات حشو مركب',quantity:20,unitCost:1500,total:30000,expiry:new Date(Date.now()+180*24*60*60*1000).toISOString().slice(0,10)},
+          {name:'مواد تعقيم شاملة',quantity:50,unitCost:500,total:25000,expiry:''}
+        ];
+        const invoice={reference,supplier:supplierName,toStock:'yes',amount:55000,notes:'فاتورة مواد استهلاكية',dueDate:new Date(Date.now()+14*24*60*60*1000).toISOString().slice(0,10),balance:55000,status:'open',createdAt:new Date().toISOString(),items};
+        await Storage.save('purchaseInvoices',[invoice]);
+        await recordJournal(buildEntry('purchase-stock',{amount:invoice.amount,supplier:supplierName}),{type:'purchase-demo',reference,supplier:supplierName,toStock:'yes'});
+        await addInventoryBatchesFromPurchase(reference,items);
+        await logAudit('seed',reference,'فاتورة مشتريات تجريبية',invoice);
+      }else{
+        supplierName=invoices[0].supplier||supplierName;
+      }
+
+      const batches=await loadInventoryBatches();
+      if(batches.length){
+        await refreshInventoryAggregates();
+        const inventory=await Storage.load('inventory');
+        let changed=false;
+        inventory.forEach(item=>{
+          if(!item.min||item.min<=0){
+            item.min=item.name.includes('تعقيم')?20:10;
+            changed=true;
+          }
+        });
+        if(changed){await Storage.save('inventory',inventory);}
+      }
+
+      const returns=await Storage.load('supplierReturns');
+      if(!returns.length){
+        const srReference=generateReference('SR');
+        const record={reference:srReference,supplier:supplierName,amount:9000,status:'pending',notes:'مرتجع بانتظار إشعار المورد',accountId:cashAccount,createdAt:new Date().toISOString()};
+        await Storage.save('supplierReturns',[record]);
+        await recordJournal(buildEntry('supplier-return',{amount:record.amount,supplier:supplierName,accountId:null,mode:'inventory'}),{type:'supplier-return-demo',reference:srReference,supplier:supplierName,mode:'inventory'});
+        await logAudit('seed',srReference,'مرتجع مورد تجريبي',record);
+      }
+
+      const payments=await Storage.load('payments');
+      if(!payments.length){
+        await createDemoPayment({paymentType:'invoice',supplier:supplierName,amount:25000,accountId:cashAccount,notes:'دفعة جزئية للمورد'});
+      }
+
+      const labs=await Storage.load('labs');
+      if(!labs.length&&patientA){
+        const reference=generateReference('LB');
+        const record={reference,patient:patientA.name,doctor:'د. ليلى',partner:'مختبر الابتسامة',service:'تاج زركون كامل',units:1,sent:new Date().toISOString().slice(0,10),expected:new Date(Date.now()+5*24*60*60*1000).toISOString().slice(0,10),cost:280000,status:'in-progress',notes:'',result:'',resultAttachment:null,createdAt:new Date().toISOString()};
+        await Storage.save('labs',[record]);
+        await logAudit('seed',reference,'طلب معمل تجريبي',record);
+      }
+    }
+
     function appointmentsSeed(){
       return [
-        {id:1,patient:'أحمد',service:'تنظيف',doctor:'د. ليلى',paid:200,due:0,status:'scheduled',period:'morning',notes:'',date:new Date().toISOString()},
-        {id:2,patient:'سارة',service:'حشو',doctor:'د. محمد',paid:0,due:300,status:'scheduled',period:'evening',notes:'',date:new Date(Date.now()+24*60*60*1000).toISOString()}
+        {id:1,patient:'أحمد علي محمد القحطاني',service:'تنظيف',doctor:'د. ليلى',paid:20000,due:0,status:'scheduled',period:'morning',notes:'',date:new Date().toISOString()},
+        {id:2,patient:'سارة محمد عبدالله العواضي',service:'حشو',doctor:'د. محمد',paid:0,due:45000,status:'scheduled',period:'evening',notes:'',date:new Date(Date.now()+24*60*60*1000).toISOString()}
       ];
     }
 
@@ -5327,7 +5601,7 @@
         const today=new Date().toISOString();
         const patientSeed=[
           {name:'أحمد علي محمد القحطاني',phone:'0711111111',balance:0,deposit:0,notes:'متابع منذ العام الماضي',createdAt:today},
-          {name:'سارة محمد عبدالله العواضي',phone:'0722222222',balance:0,deposit:250,notes:'حساسية من البنسلين',createdAt:today},
+          {name:'سارة محمد عبدالله العواضي',phone:'0722222222',balance:0,deposit:0,notes:'حساسية من البنسلين',createdAt:today},
           {name:'خالد يوسف أحمد المتوكل',phone:'0733333333',balance:0,deposit:0,notes:'خطة علاج تقويمية',createdAt:today}
         ];
         await Storage.save('patients',patientSeed);
@@ -5340,10 +5614,11 @@
       if(!appointments.length){
         await Storage.save('appointments',appointmentsSeed());
       }
+      await seedDemoData();
       await updatePatientSelectors();
       updateStatus();
       renderNav();
-      switchView('dashboard');
+      switchView(firstAllowedView());
       await AccountingHub.refresh();
       renderVoucherTable();
       renderJournalTable();
