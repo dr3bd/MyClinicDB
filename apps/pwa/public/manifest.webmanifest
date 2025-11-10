@@ -1,0 +1,11 @@
+{
+  "name": "MyClinicDB",
+  "short_name": "Clinic",
+  "display": "standalone",
+  "start_url": ".",
+  "lang": "ar",
+  "dir": "rtl",
+  "background_color": "#f4f7fb",
+  "theme_color": "#0c8a8a",
+  "icons": []
+}
