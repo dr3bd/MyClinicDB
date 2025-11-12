@@ -1,29 +1,78 @@
-<!-- tap Markdown in the upper right corner and switch to Preview -->
+# MyClinicDB
 
-Working Copy
-============
+**نظام إدارة مركز الأسنان محلي-أولًا (Offline-first)**
 
-Welcome to Working Copy, a full-featured Git client for iOS. :birthday:
+هذا المستودع يوفر هيكل مشروع متعدد التطبيقات:
 
-Git is a powerful system and can take some time to master. The same is true for this application and even though you will not need 
-to work with the command-line, some understanding of Git is needed. If you are not confident with the core concepts of Git you should 
-read the first few chapters of [Pro Git](http://git-scm.com/book) by Scott Chacon. 
+- `apps/pwa`: تطبيق ويب تقدمي يعمل على iPad وSafari مع تجربة RTL افتراضية.
+- `apps/desktop-electron`: تطبيق سطح مكتب مبني على Electron لنظام Windows.
+- `packages/core`: طبقة النطاق (Domain) والخدمات والمستودعات وقاعدة البيانات الذاكرية والنسخ الاحتياطي.
+- `packages/ui`: مكتبة مكوّنات React/RTL قابلة لإعادة الاستخدام.
 
-The goal has been to make a interface that is suitable for touch, works well with other applications on your device and 
-can take part in workflows where development happens on traditional computers. 
+The repository ships with complete TypeScript sources, seed data, unit tests, and Vite-based tooling to help you build and package the dental center management experience.
 
-I have made things a little more convenient for [GitHub](https://github.com), [BitBucket](https://bitbucket.org), [GitLab](https://gitlab.com) and [Gitea](https://gitea.io/) users but you can use any modern Git hosting service or your own Git server.
+## المتطلبات (Requirements)
 
-You will be able to access files inside Working Copy from other apps if they support the system document picker or document browser
-and [many other](https://workingcopy.app/manual.html#extending-ios) integration points are supported as well. 
+- Node.js 18 أو أحدث.
+- npm 8+ (أو يمكنك استخدام pnpm/yarn مع دعم workspaces).
 
-If you like Working Copy and want it to prosper and improve, you should tell people about it. Praise it in a App Store review, on Mastodon or over lunch with friends and co-workers. 
-Development is self-financed. Most of the time Working Copy is bringing in enough revenue to pay my bills allowing me to work full time at
-full speed. Unfortunately I sometimes need to spend time doing contracting work slowing down Working Copy development.
+## التثبيت (Install)
 
-You can delete this repository from the *Status and Configuration* screen or from the context menu.
+```bash
+npm install
+```
 
-If you have questions you can check out the [Users’ guide](working-copy://manual) and if the app is
-misbehaving or missing critical features write me at [anders@workingcopy.app](mailto:anders@workingcopy.app).
+## التشغيل أثناء التطوير (Development)
 
-![Anders Borum](/examples/anders.png)
+### PWA
+```bash
+npm run start:pwa
+```
+سيتم تشغيل Vite على المنفذ الافتراضي، ويمكن فتح `http://localhost:5173` باللغة العربية وبالبيانات التجريبية.
+
+### Desktop (Electron)
+```bash
+npm run start:desktop
+```
+هذا الأمر يقوم بتشغيل Vite للواجهة الأمامية مع مراقبة Electron لتحديث النافذة تلقائيًا.
+
+## البناء والتعبئة (Build & Package)
+
+```bash
+npm run build       # يبني جميع الحزم
+npm run package:desktop  # يبني تطبيق Electron باستخدام electron-builder
+```
+
+## الاختبارات (Tests)
+
+يحتوي `packages/core` على اختبارات Vitest للتحقق من خدمات المرضى والجلسات والفوترة والمخزون والنسخ الاحتياطي:
+
+```bash
+npm run test --workspace packages/core
+```
+
+## الميزات الرئيسية (Highlights)
+
+- **العملة الوحيدة YER**: جميع الخدمات تفرض التكامل على الريال اليمني بدون كسور.
+- **لا ضرائب**: طبقة الحسابات والفوترة خالية تمامًا من الحقول الضريبية.
+- **خدمات مشتركة**: PatientService، SessionService، InventoryService، Invoice/Cashbox، Lab، Report، Backup مع تشفير AES-256 لملفات JSON وتصدير SQLite (sql.js).
+- **مكتبة UI عربية**: AppShell، DataTable، ToothFDI، SmartForm، مكونات PDF، Toast/Tag/Badge، وغيرها تدعم RTL والوضع الليلي عبر CSS Variables.
+- **Seed Data**: بيانات أولية تشمل 3 أطباء، 20 مريضًا، جلسات، سندات قبض ودفع، مواد مخزون، وأوامر معمل.
+- **تطبيقات جاهزة**: PWA وElectron يتشاركان نفس الخدمات والمكوّنات ويعرضان لوحة تحكم، قائمة مرضى، مواعيد، وفوترة.
+
+## النسخ الاحتياطي والاستعادة (Backup & Restore)
+
+استخدم `BackupService` من `@myclinicdb/core` لتوليد ملفات JSON مشفرة أو ملفات SQLite تحتوي على جميع الجداول:
+
+```ts
+import { InMemoryRepositoryBundle, BackupService } from '@myclinicdb/core';
+
+const repositories = new InMemoryRepositoryBundle();
+const backup = new BackupService(repositories);
+const envelope = await backup.exportJSON('strong-password');
+const sqlite = await backup.exportSQLite();
+```
+
+## تراخيص وأذونات (Licensing)
+
+الكود متاح بموجب رخصة MIT ويمكن إعادة استخدامه وتعديله داخليًا لتشغيل العيادات دون اتصال.

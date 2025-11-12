@@ -1,0 +1,27 @@
+{
+  "name": "@myclinicdb/pwa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@myclinicdb/core": "0.1.0",
+    "@myclinicdb/ui": "0.1.0",
+    "dexie": "4.0.4",
+    "i18next": "23.7.18",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-i18next": "13.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.48",
+    "@types/react-dom": "18.2.18",
+    "@vitejs/plugin-react": "4.2.1",
+    "typescript": "5.3.3",
+    "vite": "5.0.10"
+  }
+}
