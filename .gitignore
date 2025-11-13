@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
+apps/desktop-electron/dist/
+apps/desktop-electron/release/
+apps/pwa/dist/
+coverage/
+.vscode/
