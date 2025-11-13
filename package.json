@@ -1,0 +1,22 @@
+{
+  "name": "myclinicdb",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MyClinicDB dental center management system",
+  "license": "MIT",
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "start:pwa": "npm --workspace apps/pwa run dev",
+    "start:desktop": "npm --workspace apps/desktop-electron run dev",
+    "package:desktop": "npm --workspace apps/desktop-electron run package"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
