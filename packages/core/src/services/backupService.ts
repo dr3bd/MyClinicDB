@@ -19,6 +19,11 @@ import type {
   ToothStatus
 } from '../entities/index.js';
 import type { RepositoryBundle } from '../repositories/types.js';
+import {
+  CREATE_INDEX_STATEMENTS,
+  CREATE_TABLE_STATEMENTS,
+  SQLITE_PRAGMAS
+} from '../db/schema.js';
 
 export interface BackupJSONEnvelope {
   schemaVersion: string;
@@ -203,97 +208,212 @@ export class BackupService {
     const SQL = await initSqlJs();
     const db = new SQL.Database();
     const data = await this.collectData();
-    db.run(`CREATE TABLE IF NOT EXISTS doctor (id TEXT PRIMARY KEY, name TEXT, phone TEXT, specialty TEXT, active INTEGER, revenue_share_percent INTEGER);`);
-    db.run(`CREATE TABLE IF NOT EXISTS patient (id TEXT PRIMARY KEY, code TEXT, full_name_ar TEXT, full_name_en TEXT, gender TEXT, dob TEXT, phone TEXT, address TEXT, notes_medical TEXT, doctor_id TEXT, created_at TEXT);`);
-    db.run(`CREATE TABLE IF NOT EXISTS appointment (id TEXT PRIMARY KEY, patient_id TEXT, doctor_id TEXT, start TEXT, end TEXT, room TEXT, status TEXT, note TEXT);`);
-    db.run(`CREATE TABLE IF NOT EXISTS invoice (id TEXT PRIMARY KEY, patient_id TEXT, date TEXT, total_yer INTEGER, paid_yer INTEGER, status TEXT, linked_session_id TEXT, notes TEXT);`);
-    db.run(`CREATE TABLE IF NOT EXISTS receipt (id TEXT PRIMARY KEY, invoice_id TEXT, date TEXT, amount_yer INTEGER, method TEXT, reference TEXT, created_by TEXT, voided INTEGER);`);
-    db.run(`CREATE TABLE IF NOT EXISTS payment_voucher (id TEXT PRIMARY KEY, date TEXT, amount_yer INTEGER, payee TEXT, reason TEXT, created_by TEXT, voided INTEGER);`);
-    db.run(`CREATE TABLE IF NOT EXISTS session (id TEXT PRIMARY KEY, patient_id TEXT, doctor_id TEXT, date TEXT, procedures_json TEXT, teeth_json TEXT, materials_json TEXT, duration_min INTEGER, fee_yer INTEGER, attachments_json TEXT, notes TEXT);`);
-    db.run(`CREATE TABLE IF NOT EXISTS inventory_item (id TEXT PRIMARY KEY, name TEXT, unit TEXT, sku TEXT, min_level INTEGER, notes TEXT);`);
-    db.run(`CREATE TABLE IF NOT EXISTS inventory_batch (id TEXT PRIMARY KEY, item_id TEXT, batch_no TEXT, expiry_date TEXT, qty_in INTEGER, qty_out INTEGER, cost_yer INTEGER);`);
-    db.run(`CREATE TABLE IF NOT EXISTS attachment (id TEXT PRIMARY KEY, owner_type TEXT, owner_id TEXT, name TEXT, mime_type TEXT, size INTEGER, data_url TEXT);`);
+    for (const pragma of SQLITE_PRAGMAS) {
+      db.run(pragma);
+    }
+    for (const statement of CREATE_TABLE_STATEMENTS) {
+      db.run(statement);
+    }
+    for (const statement of CREATE_INDEX_STATEMENTS) {
+      db.run(statement);
+    }
     const insertRow = (table: string, columns: string[], row: unknown[]) => {
       const stmt = db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`);
       stmt.run(row);
       stmt.free();
     };
+    const bool = (value: boolean) => (value ? 1 : 0);
     for (const doctor of data.doctors) {
-      insertRow('doctor', ['id', 'name', 'phone', 'specialty', 'active', 'revenue_share_percent'], [
-        doctor.id,
-        doctor.name,
-        doctor.phone ?? null,
-        doctor.specialty ?? null,
-        doctor.active ? 1 : 0,
-        doctor.revenueSharePercent
-      ]);
+      insertRow(
+        'doctor',
+        ['id', 'name', 'phone', 'specialty', 'active', 'revenue_share_percent', 'created_at', 'updated_at'],
+        [
+          doctor.id,
+          doctor.name,
+          doctor.phone ?? null,
+          doctor.specialty ?? null,
+          bool(doctor.active),
+          doctor.revenueSharePercent,
+          doctor.createdAt,
+          doctor.updatedAt
+        ]
+      );
     }
     for (const patient of data.patients) {
-      insertRow('patient', ['id', 'code', 'full_name_ar', 'full_name_en', 'gender', 'dob', 'phone', 'address', 'notes_medical', 'doctor_id', 'created_at'], [
-        patient.id,
-        patient.code,
-        patient.fullNameAr,
-        patient.fullNameEn ?? null,
-        patient.gender,
-        patient.dob ?? null,
-        patient.phone ?? null,
-        patient.address ?? null,
-        patient.notesMedical ?? null,
-        patient.doctorId ?? null,
-        patient.createdAt
-      ]);
+      insertRow(
+        'patient',
+        [
+          'id',
+          'code',
+          'full_name_ar',
+          'full_name_en',
+          'gender',
+          'dob',
+          'phone',
+          'address',
+          'notes_medical',
+          'doctor_id',
+          'created_at',
+          'updated_at'
+        ],
+        [
+          patient.id,
+          patient.code,
+          patient.fullNameAr,
+          patient.fullNameEn ?? null,
+          patient.gender,
+          patient.dob ?? null,
+          patient.phone ?? null,
+          patient.address ?? null,
+          patient.notesMedical ?? null,
+          patient.doctorId ?? null,
+          patient.createdAt,
+          patient.updatedAt
+        ]
+      );
+    }
+    for (const status of data.toothStatuses) {
+      insertRow(
+        'tooth_status',
+        ['id', 'code', 'label_ar', 'label_en', 'color', 'is_default', 'created_at', 'updated_at'],
+        [
+          status.id,
+          status.code,
+          status.labelAr,
+          status.labelEn ?? null,
+          status.color ?? null,
+          bool(status.isDefault),
+          status.createdAt,
+          status.updatedAt
+        ]
+      );
+    }
+    for (const tooth of data.patientTeeth) {
+      insertRow(
+        'patient_tooth',
+        ['id', 'patient_id', 'tooth_number', 'status_id', 'notes', 'created_at', 'updated_at'],
+        [
+          tooth.id,
+          tooth.patientId,
+          tooth.toothNumber,
+          tooth.statusId,
+          tooth.notes ?? null,
+          tooth.createdAt,
+          tooth.updatedAt
+        ]
+      );
     }
     for (const appointment of data.appointments) {
-      insertRow('appointment', ['id', 'patient_id', 'doctor_id', 'start', 'end', 'room', 'status', 'note'], [
-        appointment.id,
-        appointment.patientId,
-        appointment.doctorId,
-        appointment.start,
-        appointment.end,
-        appointment.room ?? null,
-        appointment.status,
-        appointment.note ?? null
-      ]);
+      insertRow(
+        'appointment',
+        ['id', 'patient_id', 'doctor_id', 'start', 'end', 'room', 'status', 'note', 'created_at', 'updated_at'],
+        [
+          appointment.id,
+          appointment.patientId,
+          appointment.doctorId,
+          appointment.start,
+          appointment.end,
+          appointment.room ?? null,
+          appointment.status,
+          appointment.note ?? null,
+          appointment.createdAt,
+          appointment.updatedAt
+        ]
+      );
     }
     for (const invoice of data.invoices) {
-      insertRow('invoice', ['id', 'patient_id', 'date', 'total_yer', 'paid_yer', 'status', 'linked_session_id', 'notes'], [
-        invoice.id,
-        invoice.patientId,
-        invoice.date,
-        invoice.totalYER,
-        invoice.paidYER,
-        invoice.status,
-        invoice.linkedSessionId ?? null,
-        invoice.notes ?? null
-      ]);
+      insertRow(
+        'invoice',
+        [
+          'id',
+          'patient_id',
+          'date',
+          'total_yer',
+          'paid_yer',
+          'status',
+          'linked_session_id',
+          'notes',
+          'created_at',
+          'updated_at'
+        ],
+        [
+          invoice.id,
+          invoice.patientId,
+          invoice.date,
+          invoice.totalYER,
+          invoice.paidYER,
+          invoice.status,
+          invoice.linkedSessionId ?? null,
+          invoice.notes ?? null,
+          invoice.createdAt,
+          invoice.updatedAt
+        ]
+      );
     }
     for (const receipt of data.receipts) {
-      insertRow('receipt', ['id', 'invoice_id', 'date', 'amount_yer', 'method', 'reference', 'created_by', 'voided'], [
-        receipt.id,
-        receipt.invoiceId ?? null,
-        receipt.date,
-        receipt.amountYER,
-        receipt.method,
-        receipt.reference ?? null,
-        receipt.createdBy,
-        receipt.voided ? 1 : 0
-      ]);
+      insertRow(
+        'receipt',
+        [
+          'id',
+          'invoice_id',
+          'date',
+          'amount_yer',
+          'method',
+          'reference',
+          'created_by',
+          'voided',
+          'created_at',
+          'updated_at'
+        ],
+        [
+          receipt.id,
+          receipt.invoiceId ?? null,
+          receipt.date,
+          receipt.amountYER,
+          receipt.method,
+          receipt.reference ?? null,
+          receipt.createdBy,
+          bool(receipt.voided),
+          receipt.createdAt,
+          receipt.updatedAt
+        ]
+      );
     }
     for (const voucher of data.paymentVouchers) {
-      insertRow('payment_voucher', ['id', 'date', 'amount_yer', 'payee', 'reason', 'created_by', 'voided'], [
-        voucher.id,
-        voucher.date,
-        voucher.amountYER,
-        voucher.payee,
-        voucher.reason,
-        voucher.createdBy,
-        voucher.voided ? 1 : 0
-      ]);
+      insertRow(
+        'payment_voucher',
+        ['id', 'date', 'amount_yer', 'payee', 'reason', 'created_by', 'voided', 'created_at', 'updated_at'],
+        [
+          voucher.id,
+          voucher.date,
+          voucher.amountYER,
+          voucher.payee,
+          voucher.reason,
+          voucher.createdBy,
+          bool(voucher.voided),
+          voucher.createdAt,
+          voucher.updatedAt
+        ]
+      );
     }
     for (const session of data.sessions) {
       insertRow(
         'session',
-        ['id', 'patient_id', 'doctor_id', 'date', 'procedures_json', 'teeth_json', 'materials_json', 'duration_min', 'fee_yer', 'attachments_json', 'notes'],
+        [
+          'id',
+          'patient_id',
+          'doctor_id',
+          'date',
+          'procedures_json',
+          'teeth_json',
+          'materials_json',
+          'duration_min',
+          'fee_yer',
+          'attachments_json',
+          'notes',
+          'created_at',
+          'updated_at'
+        ],
         [
           session.id,
           session.patientId,
@@ -305,41 +425,163 @@ export class BackupService {
           session.durationMinutes,
           session.feeYER,
           JSON.stringify(session.attachments),
-          session.notes ?? null
+          session.notes ?? null,
+          session.createdAt,
+          session.updatedAt
         ]
       );
     }
     for (const item of data.inventoryItems) {
-      insertRow('inventory_item', ['id', 'name', 'unit', 'sku', 'min_level', 'notes'], [
-        item.id,
-        item.name,
-        item.unit ?? null,
-        item.sku ?? null,
-        item.minimumLevel ?? null,
-        item.notes ?? null
-      ]);
+      insertRow(
+        'inventory_item',
+        ['id', 'name', 'unit', 'sku', 'min_level', 'notes', 'created_at', 'updated_at'],
+        [
+          item.id,
+          item.name,
+          item.unit ?? null,
+          item.sku ?? null,
+          item.minimumLevel ?? null,
+          item.notes ?? null,
+          item.createdAt,
+          item.updatedAt
+        ]
+      );
     }
     for (const batch of data.inventoryBatches) {
-      insertRow('inventory_batch', ['id', 'item_id', 'batch_no', 'expiry_date', 'qty_in', 'qty_out', 'cost_yer'], [
-        batch.id,
-        batch.itemId,
-        batch.batchNo,
-        batch.expiryDate,
-        batch.quantityIn,
-        batch.quantityOut,
-        batch.costYER
-      ]);
+      insertRow(
+        'inventory_batch',
+        [
+          'id',
+          'item_id',
+          'batch_no',
+          'expiry_date',
+          'qty_in',
+          'qty_out',
+          'cost_yer',
+          'created_at',
+          'updated_at'
+        ],
+        [
+          batch.id,
+          batch.itemId,
+          batch.batchNo,
+          batch.expiryDate,
+          batch.quantityIn,
+          batch.quantityOut,
+          batch.costYER,
+          batch.createdAt,
+          batch.updatedAt
+        ]
+      );
+    }
+    for (const supplier of data.suppliers) {
+      insertRow(
+        'supplier',
+        ['id', 'name', 'phone', 'address', 'active', 'created_at', 'updated_at'],
+        [
+          supplier.id,
+          supplier.name,
+          supplier.phone ?? null,
+          supplier.address ?? null,
+          bool(supplier.active),
+          supplier.createdAt,
+          supplier.updatedAt
+        ]
+      );
+    }
+    for (const order of data.labOrders) {
+      insertRow(
+        'lab_order',
+        [
+          'id',
+          'patient_id',
+          'doctor_id',
+          'type',
+          'sent_date',
+          'due_date',
+          'lab_name',
+          'cost_yer',
+          'status',
+          'notes',
+          'created_at',
+          'updated_at'
+        ],
+        [
+          order.id,
+          order.patientId,
+          order.doctorId,
+          order.type,
+          order.sentDate,
+          order.dueDate ?? null,
+          order.labName ?? null,
+          order.costYER ?? null,
+          order.status,
+          order.notes ?? null,
+          order.createdAt,
+          order.updatedAt
+        ]
+      );
+    }
+    for (const entry of data.ledger) {
+      insertRow(
+        'ledger',
+        ['id', 'date', 'type', 'ref_id', 'direction', 'amount_yer', 'note', 'created_at', 'updated_at'],
+        [
+          entry.id,
+          entry.date,
+          entry.type,
+          entry.referenceId ?? null,
+          entry.direction,
+          entry.amountYER,
+          entry.note ?? null,
+          entry.createdAt,
+          entry.updatedAt
+        ]
+      );
+    }
+    for (const log of data.auditLogs) {
+      insertRow(
+        'audit_log',
+        ['id', 'ts', 'user', 'action', 'entity', 'entity_id', 'delta_json', 'created_at', 'updated_at'],
+        [
+          log.id,
+          log.timestamp,
+          log.user,
+          log.action,
+          log.entity,
+          log.entityId,
+          JSON.stringify(log.delta),
+          log.createdAt,
+          log.updatedAt
+        ]
+      );
     }
     for (const attachment of data.attachments) {
-      insertRow('attachment', ['id', 'owner_type', 'owner_id', 'name', 'mime_type', 'size', 'data_url'], [
-        attachment.id,
-        attachment.ownerType,
-        attachment.ownerId,
-        attachment.name,
-        attachment.mimeType,
-        attachment.size,
-        attachment.dataUrl ?? null
-      ]);
+      insertRow(
+        'attachment',
+        [
+          'id',
+          'owner_type',
+          'owner_id',
+          'name',
+          'mime_type',
+          'size',
+          'data_url',
+          'created_at',
+          'updated_at'
+        ],
+        [
+          attachment.id,
+          attachment.ownerType,
+          attachment.ownerId,
+          attachment.name,
+          attachment.mimeType,
+          attachment.size,
+          attachment.dataUrl ?? null,
+          attachment.createdAt,
+          attachment.updatedAt
+        ]
+      );
     }
     return db.export();
   }
